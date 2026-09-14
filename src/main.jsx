@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ArrowUpRight, BookOpen, Check, ChevronRight, Clapperboard, Film, Headphones, Layers3, Menu, RotateCcw, Sparkles, Volume2, X } from 'lucide-react'
+import FilmLanguage from './filmLanguage.jsx'
 import './styles.css'
 
 const api = async (url, options) => {
@@ -42,10 +43,10 @@ function App() {
   return <div className="app-shell">
     <header className="topbar">
       <a className="brand" href="#top" onClick={()=>setView('lab')}><span className="brand-mark"><Clapperboard size={16}/></span><span>导演学习实验室</span><em>DIRECTOR'S LAB</em></a>
-      <nav className={menu ? 'nav open' : 'nav'}><button className={view==='lab'?'active':''} onClick={()=>{setView('lab');setMenu(false)}}>今日片场</button><button className={view==='archive'?'active':''} onClick={()=>{setView('archive');setMenu(false)}}>学习档案</button><button onClick={()=>{setView('lab');setMenu(false);setTimeout(()=>document.querySelector('#about')?.scrollIntoView({behavior:'smooth'}),0)}}>关于实验室</button></nav>
+      <nav className={menu ? 'nav open' : 'nav'}><button className={view==='lab'?'active':''} onClick={()=>{setView('lab');setMenu(false)}}>今日片场</button><button className={view==='language'?'active':''} onClick={()=>{setView('language');setMenu(false)}}>电影语言</button><button className={view==='archive'?'active':''} onClick={()=>{setView('archive');setMenu(false)}}>学习档案</button><button onClick={()=>{setView('lab');setMenu(false);setTimeout(()=>document.querySelector('#about')?.scrollIntoView({behavior:'smooth'}),0)}}>关于实验室</button></nav>
       <div className="top-actions"><span className="streak"><Sparkles size={14}/> {progress.streak} 天连续</span><button className="avatar">林</button><button className="menu-btn" onClick={()=>setMenu(!menu)}>{menu?<X size={20}/>:<Menu size={20}/>}</button></div>
     </header>
-    {view === 'archive' ? <Archive progress={progress} modules={modules} history={history} /> : <>
+    {view === 'archive' ? <Archive progress={progress} modules={modules} history={history} /> : view === 'language' ? <FilmLanguage /> : <>
       <section className="hero" id="top">
         <div className="hero-copy"><p className="eyebrow"><span className="dot"/> WEEK 02 · 场景实验</p><h1>一场戏，<br/><i>从哪里开始？</i></h1><p className="hero-lede">导演不是把答案拍出来的人。<br/>是决定观众<strong>先感受到什么</strong>的人。</p><button className="primary" onClick={()=>openModule('shot')}>进入今日片场 <ArrowUpRight size={17}/></button></div>
         <div className="hero-scene"><div className="scene-frame"><div className="scene-light"/><div className="scene-window"><span>23:47</span></div><div className="scene-person"><div className="head"/><div className="coat"/></div><div className="scene-counter"/><div className="scene-caption"><span>SCENE 08 / INT. CONVENIENCE STORE</span><span>TAKE 03</span></div></div><p className="frame-note">今晚的练习：让空间替角色说一句话。</p></div>
@@ -53,6 +54,7 @@ function App() {
       <section className="workspace" id="modules"><div className="section-intro"><div><p className="eyebrow">从一个决定开始</p><h2>拆解导演的选择</h2></div><p>同一个场景，没有唯一解。<br/>选择你的处理方式，看看它如何改变观众的感受。</p></div>
         <div className="module-grid">{modules.map((m,i)=><ModuleCard key={m.id} module={m} index={i} onClick={()=>openModule(m.id)} />)}</div>
       </section>
+      <section className="fl-entry"><div><p className="eyebrow">新课程 · 电影语言基础</p><h2>景别、机位、运动、构图、光线、色彩。</h2><p className="muted">六个概念，六场戏。点击镜头方案，画面会回答你。</p></div><button className="primary" onClick={()=>setView('language')}>进入电影语言 <ArrowUpRight size={16}/></button></section>
       <section className="quote-band" id="about"><div className="quote-mark">“</div><blockquote>电影不是被拍摄的，<br/><em>是被选择的。</em></blockquote><div className="quote-meta"><span>— 导演学习实验室</span><small>关于观看、判断与实践</small></div></section>
       <section className="continue"><div><p className="eyebrow">你的学习轨迹</p><h2>保持好奇，继续往前。</h2><p className="muted">每一次选择都会留在你的导演档案里。</p></div><div className="progress-card"><div className="progress-top"><span>本周进度</span><b>{Math.min(progress.completed, 8)} <small>/ 8 个练习</small></b></div><div className="progress-track"><span style={{width:`${Math.min(progress.completed/8*100,100)}%`}}/></div><div className="progress-foot"><span><Check size={14}/> {progress.completed} 已完成</span><span>下一个：场面调度 <ChevronRight size={14}/></span></div></div></section>
     </>}

@@ -1,20 +1,28 @@
 import express from 'express'
 import path from 'node:path'
+import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { DatabaseSync } from 'node:sqlite'
+import { concepts } from './data/concepts.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const db = new DatabaseSync(path.join(__dirname, 'lab.db'))
-db.exec(`CREATE TABLE IF NOT EXISTS progress (id INTEGER PRIMARY KEY, completed INTEGER NOT NULL DEFAULT 0, streak INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS practice (id INTEGER PRIMARY KEY AUTOINCREMENT, module_id TEXT NOT NULL, answer TEXT NOT NULL, score INTEGER NOT NULL, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS completed_module (module_id TEXT PRIMARY KEY, completed_at TEXT NOT NULL);`)
-const count = db.prepare('SELECT COUNT(*) as count FROM progress').get().count
-if (!count) db.prepare('INSERT INTO progress (id, completed, streak, updated_at) VALUES (1, 2, 3, ?)').run(new Date().toISOString())
-if (!db.prepare('SELECT COUNT(*) as count FROM completed_module').get().count) {
-  const seededAt = new Date().toISOString()
-  db.prepare('INSERT OR IGNORE INTO completed_module (module_id, completed_at) VALUES (?, ?)').run('shot', seededAt)
-  db.prepare('INSERT OR IGNORE INTO completed_module (module_id, completed_at) VALUES (?, ?)').run('blocking', seededAt)
+
+// ---- 轻量 JSON 持久层（Node 20 无 node:sqlite，改用文件存储） ----
+const storePath = path.join(__dirname, 'lab-data.json')
+const seed = () => ({
+  progress: { completed: 2, streak: 3, updatedAt: new Date().toISOString() },
+  practice: [],
+  completedModules: [
+    { moduleId: 'shot', completedAt: new Date().toISOString() },
+    { moduleId: 'blocking', completedAt: new Date().toISOString() }
+  ],
+  judgments: []
+})
+const load = () => {
+  try { return { ...seed(), ...JSON.parse(fs.readFileSync(storePath, 'utf8')) } }
+  catch { const fresh = seed(); fs.writeFileSync(storePath, JSON.stringify(fresh, null, 2)); return fresh }
 }
+const store = load()
+const save = () => fs.writeFileSync(storePath, JSON.stringify(store, null, 2))
 
 const modules = [
   { id:'shot', kicker:'01 · 镜头', title:'让观众先看见什么？', duration:'12 min', type:'scene', color:'ochre', prompt:'雨夜，女孩在便利店门口等一个没有出现的人。你会怎么开始这一场？', choices:[{id:'wide',label:'远景：把她放进空旷街道',detail:'孤独先于人物抵达。空间成为叙事的一部分。',score:3},{id:'close',label:'特写：先拍她握紧的手',detail:'从身体的微小动作建立悬念，让观众主动补全信息。',score:2},{id:'follow',label:'跟拍：从她身后穿过人群',detail:'把观众放在她的主观位置，等待感更具身体性。',score:2}]},
@@ -25,15 +33,20 @@ const modules = [
 
 const app = express()
 app.use(express.json())
+
 app.get('/api/modules', (_, res) => res.json(modules))
-app.get('/api/progress', (_, res) => res.json(db.prepare('SELECT completed, streak, updated_at as updatedAt FROM progress WHERE id=1').get()))
+app.get('/api/progress', (_, res) => {
+  const { completed, streak, updatedAt } = store.progress
+  res.json({ completed, streak, updatedAt })
+})
 app.post('/api/progress', (req, res) => {
   const completed = Number(req.body.completed)
   const streak = Number(req.body.streak)
   if (!Number.isInteger(completed) || completed < 0 || completed > modules.length || !Number.isInteger(streak) || streak < 0) {
     return res.status(400).json({ error: 'completed must be an integer between 0 and 4, and streak must be a non-negative integer' })
   }
-  db.prepare('UPDATE progress SET completed=?, streak=?, updated_at=? WHERE id=1').run(completed, streak, new Date().toISOString())
+  store.progress = { completed, streak, updatedAt: new Date().toISOString() }
+  save()
   res.json({ completed, streak })
 })
 app.post('/api/practice', (req, res) => {
@@ -46,26 +59,47 @@ app.post('/api/practice', (req, res) => {
   }
   const now = new Date()
   const nowIso = now.toISOString()
-  const current = db.prepare('SELECT streak, updated_at as updatedAt FROM progress WHERE id=1').get()
   const today = nowIso.slice(0, 10)
-  const lastDay = current.updatedAt.slice(0, 10)
+  const lastDay = store.progress.updatedAt.slice(0, 10)
   const yesterday = new Date(now)
   yesterday.setUTCDate(yesterday.getUTCDate() - 1)
-  const nextStreak = lastDay === today ? current.streak : lastDay === yesterday.toISOString().slice(0, 10) ? current.streak + 1 : 1
-  db.exec('BEGIN')
-  try {
-    db.prepare('INSERT INTO practice (module_id, answer, score, created_at) VALUES (?, ?, ?, ?)').run(moduleId, answer, numericScore, nowIso)
-    db.prepare('INSERT OR IGNORE INTO completed_module (module_id, completed_at) VALUES (?, ?)').run(moduleId, nowIso)
-    const completed = db.prepare('SELECT COUNT(*) as count FROM completed_module').get().count
-    db.prepare('UPDATE progress SET completed=?, streak=?, updated_at=? WHERE id=1').run(completed, nextStreak, nowIso)
-    db.exec('COMMIT')
-    res.status(201).json({ ok: true, progress: { completed, streak: nextStreak } })
-  } catch (error) {
-    db.exec('ROLLBACK')
-    res.status(500).json({ error: 'failed to save practice' })
+  const streak = lastDay === today ? store.progress.streak : lastDay === yesterday.toISOString().slice(0, 10) ? store.progress.streak + 1 : 1
+  store.practice.push({ moduleId, answer, score: numericScore, createdAt: nowIso })
+  if (!store.completedModules.some(item => item.moduleId === moduleId)) {
+    store.completedModules.push({ moduleId, completedAt: nowIso })
   }
+  store.progress = { completed: store.completedModules.length, streak, updatedAt: nowIso }
+  save()
+  res.status(201).json({ ok: true, progress: { completed: store.progress.completed, streak } })
 })
-app.get('/api/practice', (_, res) => res.json(db.prepare('SELECT module_id as moduleId, answer, score, created_at as createdAt FROM practice ORDER BY id DESC LIMIT 20').all()))
+app.get('/api/practice', (_, res) => res.json([...store.practice].reverse().slice(0, 20)))
+
+// ---- 电影语言学习模块 ----
+app.get('/api/film-language/concepts', (_, res) => res.json(concepts))
+app.get('/api/film-language/judgments', (_, res) => res.json([...store.judgments].reverse().slice(0, 50)))
+app.post('/api/film-language/judgments', (req, res) => {
+  const { conceptId, optionId } = req.body
+  const note = typeof req.body.note === 'string' ? req.body.note.trim() : ''
+  const concept = concepts.find(item => item.id === conceptId)
+  const option = concept?.options.find(item => item.id === optionId)
+  if (!concept || !option) {
+    return res.status(400).json({ error: 'conceptId and optionId do not match a valid concept option' })
+  }
+  if (!note || note.length > 500) {
+    return res.status(400).json({ error: 'note is required and must be at most 500 characters' })
+  }
+  const entry = {
+    id: store.judgments.length + 1,
+    conceptId,
+    optionId,
+    note,
+    createdAt: new Date().toISOString()
+  }
+  store.judgments.push(entry)
+  save()
+  res.status(201).json(entry)
+})
+
 app.use('/api', (_, res) => res.status(404).json({ error: 'API route not found' }))
 app.use(express.static(path.join(__dirname, 'dist')))
 app.use((_, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')))
