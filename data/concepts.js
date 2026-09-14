@@ -49,7 +49,7 @@ export const concepts = [
         brief: '只剩她握着手机的手和半张脸。',
         feeling: '没有退路地贴近。每一次呼吸都被放大，等待变成煎熬。',
         analysis: '特写是强调，用得越少越有力——它告诉观众这一秒很重要。一场戏里第一个特写出现的位置，就是导演的重音。',
-        visual: { zoom: 4.4, focusX: 250, focusY: 120 }
+        visual: { zoom: 4.2, focusX: 253, focusY: 133 }
       }
     ]
   },

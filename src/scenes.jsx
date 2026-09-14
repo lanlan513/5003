@@ -18,6 +18,9 @@ function ShotSizeScene({ visual }) {
         <radialGradient id="ss-door" cx="0.5" cy="0.5" r="0.6">
           <stop offset="0" stopColor="#ffdf9e" stopOpacity="0.5" /><stop offset="1" stopColor="#ffdf9e" stopOpacity="0" />
         </radialGradient>
+        <radialGradient id="ss-phone" cx="0.5" cy="0.5" r="0.55">
+          <stop offset="0" stopColor="#d8e8e2" stopOpacity="0.75" /><stop offset="1" stopColor="#d8e8e2" stopOpacity="0" />
+        </radialGradient>
       </defs>
       <g style={{ transform, transition: 'transform .8s cubic-bezier(.33,1,.32,1)' }}>
         <rect x="-200" y="-160" width="800" height="360" fill="url(#ss-sky)" />
@@ -53,8 +56,15 @@ function ShotSizeScene({ visual }) {
           <circle cx="250" cy="122" r="11" fill="#c9a582" />
           <path d="M239 120 a11 11 0 0 1 22 0 l-2 -8 a12 10 0 0 0 -18 0 Z" fill="#2b2320" />
           <rect x="238" y="150" width="5" height="20" rx="2" fill="#22282b" transform="rotate(14 240 150)" />
-          <rect x="257" y="150" width="5" height="20" rx="2" fill="#22282b" transform="rotate(-20 260 150)" />
-          <rect x="259" y="168" width="7" height="10" rx="1" fill="#0f1315" stroke="#5a6a66" strokeWidth="0.6" />
+          {/* 抬起的手臂与握着手机的手（特写的视觉主体） */}
+          <line x1="255" y1="141" x2="262" y2="150" stroke="#22282b" strokeWidth="5.5" strokeLinecap="round" />
+          <circle cx="260" cy="144" r="17" fill="url(#ss-phone)" />
+          <g transform="rotate(-8 261 144)">
+            <rect x="255" y="135" width="11" height="17" rx="1.5" fill="#0f1315" stroke="#5a6a66" strokeWidth="0.7" />
+            <rect x="257" y="137.5" width="7" height="11" rx="0.8" fill="#cfe0d8" opacity="0.95" />
+          </g>
+          <circle cx="262" cy="151" r="4.4" fill="#c9a582" />
+          <path d="M258 148 q4 -3 7 1" stroke="#b9926f" strokeWidth="1.6" fill="none" strokeLinecap="round" />
         </g>
       </g>
     </svg>
@@ -128,7 +138,7 @@ function AngleScene({ visual }) {
           <circle cx="200" cy="72" r="24" fill="#b9926f" />
           <path d="M176 68 a24 24 0 0 1 48 0 l-3 -12 a24 18 0 0 0 -42 0 Z" fill="#241f1c" />
           <path d="M182 84 Q200 96 218 84 L218 92 Q200 102 182 92 Z" fill="#241f1c" opacity="0.35" />
-          <text x="200" y="228" textAnchor="middle" fontSize="8" fill="#0f1315" fontFamily="DM Mono, monospace" letterSpacing="2">LOW ANGLE — 他掌控了房间</text>
+          <text x="200" y="228" textAnchor="middle" fontSize="8" fill="#9aa3a6" fontFamily="DM Mono, monospace" letterSpacing="2">LOW ANGLE — 他掌控了房间</text>
         </g>
       )}
     </svg>
