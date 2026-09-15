@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ArrowUpRight, ArrowLeft, BookOpen, Check, ChevronRight, Clapperboard, Clock3, Compass, Eye, FileText, Film, FolderOpen, Headphones, Layers3, Lightbulb, Menu, Pencil, PenLine, RotateCcw, Save, Sparkles, Users, Volume2, X, Zap } from 'lucide-react'
+import { AlertTriangle, ArrowUpRight, ArrowLeft, BookOpen, Camera, Check, ChevronRight, Clapperboard, Clock3, Compass, Eye, FileText, Film, FolderOpen, Headphones, HeartCrack, Layers3, Lightbulb, MapPin, Menu, Pencil, PenLine, RotateCcw, Save, Sparkles, Users, Volume2, X, Zap } from 'lucide-react'
 import './styles.css'
 
 const api = async (url, options) => {
@@ -19,6 +19,8 @@ function App() {
   const [answer, setAnswer] = useState(null)
   const [menu, setMenu] = useState(false)
   const [view, setView] = useState('lab')
+  // 进入拍摄决策时携带 nonce，使每次点击都重新拉取当日任务
+  const [shootRequest, setShootRequest] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [history, setHistory] = useState([])
   // { projectId?: number, nonce: number } —— 从档案里点开某个创作时携带 projectId
@@ -31,6 +33,7 @@ function App() {
   const activeModule = useMemo(() => modules.find(m => m.id === active), [modules, active])
   const openModule = (id) => { setActive(id); setAnswer(null); setView('lab'); window.scrollTo({ top: 0, behavior: 'smooth' }) }
   const enterWorkbench = (projectId = null) => { setBenchRequest({ projectId, nonce: Date.now() }); setView('workbench'); setMenu(false); window.scrollTo({ top: 0 }) }
+  const enterShoot = () => { setShootRequest({ nonce: Date.now() }); setView('shoot'); setMenu(false); window.scrollTo({ top: 0 }) }
   const submit = async (choice) => {
     if (answer || submitting || !activeModule) return
     setSubmitting(true)
@@ -47,11 +50,12 @@ function App() {
   return <div className="app-shell">
     <header className="topbar">
       <a className="brand" href="#top" onClick={()=>setView('lab')}><span className="brand-mark"><Clapperboard size={16}/></span><span>导演学习实验室</span><em>DIRECTOR'S LAB</em></a>
-      <nav className={menu ? 'nav open' : 'nav'}><button className={view==='lab'?'active':''} onClick={()=>{setView('lab');setMenu(false)}}>今日片场</button><button className={view==='workbench'?'active':''} onClick={()=>enterWorkbench()}>导演工作台</button><button className={view==='archive'?'active':''} onClick={()=>{setView('archive');setMenu(false)}}>学习档案</button><button onClick={()=>{setView('lab');setMenu(false);setTimeout(()=>document.querySelector('#about')?.scrollIntoView({behavior:'smooth'}),0)}}>关于实验室</button></nav>
+      <nav className={menu ? 'nav open' : 'nav'}><button className={view==='lab'?'active':''} onClick={()=>{setView('lab');setMenu(false)}}>今日片场</button><button className={view==='workbench'?'active':''} onClick={()=>enterWorkbench()}>导演工作台</button><button className={view==='shoot'?'active':''} onClick={enterShoot}>拍摄决策</button><button className={view==='archive'?'active':''} onClick={()=>{setView('archive');setMenu(false)}}>学习档案</button><button onClick={()=>{setView('lab');setMenu(false);setTimeout(()=>document.querySelector('#about')?.scrollIntoView({behavior:'smooth'}),0)}}>关于实验室</button></nav>
       <div className="top-actions"><span className="streak"><Sparkles size={14}/> {progress.streak} 天连续</span><button className="avatar">林</button><button className="menu-btn" onClick={()=>setMenu(!menu)}>{menu?<X size={20}/>:<Menu size={20}/>}</button></div>
     </header>
     {view === 'archive' ? <Archive progress={progress} modules={modules} history={history} onOpenWorkbench={enterWorkbench} />
      : view === 'workbench' ? <Workbench request={benchRequest} onBack={()=>setView('lab')} />
+     : view === 'shoot' ? <ShootLab request={shootRequest} onBack={()=>setView('lab')} />
      : <>
       <section className="hero" id="top">
         <div className="hero-copy"><p className="eyebrow"><span className="dot"/> WEEK 02 · 场景实验</p><h1>一场戏，<br/><i>从哪里开始？</i></h1><p className="hero-lede">导演不是把答案拍出来的人。<br/>是决定观众<strong>先感受到什么</strong>的人。</p><button className="primary" onClick={()=>openModule('shot')}>进入今日片场 <ArrowUpRight size={17}/></button></div>
@@ -61,6 +65,7 @@ function App() {
         <div className="module-grid">{modules.map((m,i)=><ModuleCard key={m.id} module={m} index={i} onClick={()=>openModule(m.id)} />)}</div>
       </section>
       <WorkbenchIntro onStart={()=>enterWorkbench()} />
+      <ShootIntro onStart={enterShoot} />
       <section className="quote-band" id="about"><div className="quote-mark">“</div><blockquote>电影不是被拍摄的，<br/><em>是被选择的。</em></blockquote><div className="quote-meta"><span>— 导演学习实验室</span><small>关于观看、判断与实践</small></div></section>
       <section className="continue"><div><p className="eyebrow">你的学习轨迹</p><h2>保持好奇，继续往前。</h2><p className="muted">每一次选择都会留在你的导演档案里。</p></div><div className="progress-card"><div className="progress-top"><span>本周进度</span><b>{Math.min(progress.completed, 8)} <small>/ 8 个练习</small></b></div><div className="progress-track"><span style={{width:`${Math.min(progress.completed/8*100,100)}%`}}/></div><div className="progress-foot"><span><Check size={14}/> {progress.completed} 已完成</span><span>下一个：场面调度 <ChevronRight size={14}/></span></div></div></section>
     </>}
@@ -373,6 +378,280 @@ function Brief({project,steps,onReopenStep,onHome}) {
       </div>
     </section>
   </div>
+}
+
+/* ---------------- 拍摄条件决策模拟 ---------------- */
+
+const SHOOT_ROLE_LABELS = { girl: '女孩', clerk: '店员', other: '约定的人', platform: '白天站台（外景）' }
+
+function ShootIntro({onStart}) {
+  return <section className="sh-intro">
+    <div className="sh-intro-scene" aria-hidden="true">
+      <div className="sh-clap"><Camera size={22}/><span>TAKE CONDITIONS</span></div>
+      <div className="sh-rain"/>
+      <div className="sh-limit-grid">
+        <span><Users size={13}/> 演员 <b>?</b></span>
+        <span><MapPin size={13}/> 场地 <b>?</b></span>
+        <span><Clock3 size={13}/> 档期 <b>?</b></span>
+        <span><Lightbulb size={13}/> 灯光 <b>?</b></span>
+        <span><Film size={13}/> 镜头 <b>?</b></span>
+      </div>
+      <p>条件已抽定，全组等你开机。</p>
+    </div>
+    <div className="sh-intro-copy">
+      <p className="eyebrow"><span className="dot"/> 拍摄条件决策 · 片场模拟</p>
+      <h2>剧本是固定的，<br/><i>条件由不得你挑。</i></h2>
+      <p className="muted">你会拿到一个完整剧本和一组今天片场的随机限制：演员数量、可用场地、拍摄时间、灯光设备、镜头上限。<br/>决定每个节拍——<strong>保留、换一种拍法，还是舍弃</strong>，并在条件之内保住你最想表达的东西。</p>
+      <p className="sh-intro-warn"><AlertTriangle size={14}/> 评分不奖励“最省钱”：什么都不拍执行分满分，表达分却是零。</p>
+      <button className="primary" onClick={onStart}><Clapperboard size={15}/> 领取今日拍摄条件</button>
+    </div>
+  </section>
+}
+
+const beatPlan = (beat, action) => {
+  if (action === 'cut') return null
+  if (action === 'keep') return { roles: beat.roles, extras: beat.extras, venue: beat.venue, time: beat.time, light: beat.light, shots: beat.shots }
+  return beat.adaptations.find(a => a.id === action) || null
+}
+
+const timeOk = (planTime, window) => planTime === 'any' || window === 'dusk' || planTime === window
+
+function ShootLab({request, onBack}) {
+  const [script, setScript] = useState(null)
+  const [mission, setMission] = useState(null)
+  const [decisions, setDecisions] = useState({})
+  const [strategy, setStrategy] = useState('')
+  const [result, setResult] = useState(null)
+  const [history, setHistory] = useState([])
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [editing, setEditing] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    setError('')
+    Promise.all([
+      api('/api/shoot/script'),
+      api('/api/shoot/missions/latest').catch(() => api('/api/shoot/missions', { method: 'POST' })),
+      api('/api/shoot/missions')
+    ]).then(([scriptData, missionData, historyData]) => {
+      if (!alive) return
+      setScript(scriptData); setMission(missionData); setHistory(historyData)
+      setDecisions(missionData.decisions || {})
+      setStrategy(missionData.strategy || '')
+      setResult(missionData.result || null)
+      setEditing(!missionData.decided)
+    }).catch(e => alive && setError(e.message))
+    return () => { alive = false }
+  }, [request?.nonce])
+
+  const c = mission?.constraints
+  const setAction = (beatId, action) => { setDecisions(d => ({ ...d, [beatId]: action })); setError('') }
+
+  // 与服务端一致的占用试算，只用于实时反馈
+  const trial = useMemo(() => {
+    if (!script || !c) return null
+    const roles = new Set()
+    let extras = 0, shots = 0, lightGaps = 0, decided = 0, cuts = 0
+    const blocked = {}
+    for (const beat of script.beats) {
+      const action = decisions[beat.id]
+      if (!action) continue
+      decided++
+      const plan = beatPlan(beat, action)
+      if (!plan) { cuts++; continue }
+      const badVenue = plan.venue !== 'any' && !c.venues.includes(plan.venue)
+      const badTime = !timeOk(plan.time, c.timeWindow)
+      if (badVenue || badTime) blocked[beat.id] = badVenue ? '该拍法需要的场地不在条件内' : '该拍法的时间窗与档期冲突'
+      plan.roles.forEach(r => roles.add(r))
+      extras = Math.max(extras, plan.extras)
+      shots += plan.shots
+      if (plan.light > c.lightLevel) lightGaps++
+    }
+    return {
+      decided, cuts, lightGaps, blocked,
+      cast: roles.size, castOver: roles.size > c.actors,
+      extras, extrasOver: extras > c.extras,
+      shots, shotsOver: shots > c.maxShots
+    }
+  }, [script, c, decisions])
+
+  const submit = async () => {
+    if (!script || !mission) return
+    const undone = script.beats.filter(b => !decisions[b.id])
+    if (undone.length) { setError(`还有 ${undone.length} 个节拍没有做决定：${undone.map(b => b.title.split('：')[0]).join('、')}`); return }
+    if (Object.keys(trial.blocked).length) { setError('有拍法超出了场地或时间条件，先换成可执行的方案。'); return }
+    if (strategy.trim().length < 8) { setError('提交前，先用一句话写下你的整体策略：这些限制下，你最想保住什么？'); return }
+    setBusy(true); setError('')
+    try {
+      const updated = await api(`/api/shoot/missions/${mission.id}/decision`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decisions, strategy }) })
+      setMission(updated); setResult(updated.result); setEditing(false)
+      api('/api/shoot/missions').then(setHistory).catch(() => {})
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+
+  if (!script || !mission || !c) return <main className="sh"><p className="muted">{error ? `加载失败：${error}` : '正在抽取今日拍摄条件……'}</p></main>
+
+  const venueText = c.venues.map(v => script.venueLabels[v] || SHOOT_ROLE_LABELS[v] || v).join('、')
+  const allDecided = trial.decided === script.beats.length
+
+  return <main className="sh">
+    <button className="wb-back" onClick={onBack}><ArrowLeft size={14}/> 返回今日片场</button>
+
+    <header className="sh-head">
+      <p className="eyebrow"><span className="dot"/> SHOOTING CONDITIONS / 任务 {String(mission.id).padStart(3, '0')} · {mission.seed}</p>
+      <h1>{script.title}</h1>
+      <p className="sh-logline">{script.logline}</p>
+      <p className="muted">{script.synopsis}</p>
+    </header>
+
+    <section className="sh-conditions">
+      <h2><AlertTriangle size={16}/> 今日片场条件（后端随机生成，今日固定）</h2>
+      <div className="sh-cond-grid">
+        <div className="sh-cond"><i><Users size={15}/></i><small>演员数量</small><b>{c.actors} 人</b><span>可出镜的角色演员，不含路人</span></div>
+        <div className="sh-cond"><i><Users size={15}/></i><small>群众演员</small><b>{c.extras} 人</b><span>可调度的路人/食客</span></div>
+        <div className="sh-cond"><i><MapPin size={15}/></i><small>可用场地</small><b>{c.venues.length} 处</b><span>{venueText}</span></div>
+        <div className="sh-cond"><i><Clock3 size={15}/></i><small>拍摄档期</small><b>{script.timeLabels[c.timeWindow]}</b><span>{c.timeWindow === 'day' ? '只能拍日戏' : c.timeWindow === 'night' ? '只能拍夜戏' : '黄昏一个短窗口，日夜戏都只能抢这一段'}</span></div>
+        <div className="sh-cond"><i><Lightbulb size={15}/></i><small>灯光设备</small><b>{script.lightLabels[c.lightLevel].split('（')[0]}</b><span>{script.lightLabels[c.lightLevel].match(/（.*）/)?.[0]?.slice(1, -1) || '按现场实际情况拍摄'}</span></div>
+        <div className="sh-cond"><i><Film size={15}/></i><small>镜头上限</small><b>{c.maxShots} 个</b><span>最终成片最多保留的镜头数</span></div>
+      </div>
+      <p className="sh-cond-note">这些条件在服务端生成后即写入数据库——刷新页面、重开浏览器，拿到的都是同一份；第二天才会重新抽取。</p>
+    </section>
+
+    {result && !editing && <ShootResult result={result} strategy={strategy} onEdit={() => setEditing(true)} />}
+
+    {(!result || editing) && <>
+      <div className="sh-meter">
+        <span className={trial.castOver ? 'over' : ''}><Users size={13}/> 演员 <b>{trial.cast}</b>/{c.actors}</span>
+        <span className={trial.extrasOver ? 'over' : ''}><Users size={13}/> 群演 <b>{trial.extras}</b>/{c.extras}</span>
+        <span className={trial.shotsOver ? 'over' : ''}><Film size={13}/> 镜头 <b>{trial.shots}</b>/{c.maxShots}</span>
+        <span className={trial.lightGaps ? 'warn' : ''}><Lightbulb size={13}/> 灯光不足 <b>{trial.lightGaps}</b></span>
+        <span className="muted">已决定 {trial.decided}/{script.beats.length} · 舍弃 {trial.cuts}</span>
+      </div>
+
+      <section className="sh-beats">
+        {script.beats.map(beat => <BeatDecision key={beat.id} beat={beat} value={decisions[beat.id]} constraints={c} script={script} blockedReason={trial.blocked[beat.id]} onChange={action => setAction(beat.id, action)} />)}
+      </section>
+
+      <section className="sh-strategy">
+        <h2><PenLine size={16}/> 开拍前，对全组说一句话</h2>
+        <p className="muted">在这些限制下，你最想保住什么？又打算放弃什么、用什么替代？这比逐格勾选更能说明你是不是一个导演。</p>
+        <textarea rows={3} maxLength={2000} placeholder="例如：没有灯也没有街，就把全片压在店内——用门铃声、玻璃倒影和那只空座位替雨夜说话……" value={strategy} onChange={e => { setStrategy(e.target.value); setError('') }}/>
+        {error && <p className="wb-error" role="alert">{error}</p>}
+        <div className="sh-actions">
+          <button className="primary" disabled={busy || !allDecided} onClick={submit}><Clapperboard size={15}/> {busy ? '正在评估……' : result ? '重新提交方案' : '提交拍摄方案'}</button>
+          {!allDecided && <span className="muted">每个节拍都必须做出决定</span>}
+        </div>
+      </section>
+    </>}
+
+    {history.filter(m => m.decided).length > 0 && <section className="sh-history">
+      <h3>往期条件与方案</h3>
+      {history.filter(m => m.decided).slice(0, 5).map(m => <div key={m.id} className="sh-history-row">
+        <span className="wb-row-index">{m.seed}</span>
+        <span className="muted">{m.constraints.actors} 演员 · {m.constraints.venues.length} 场地 · {m.constraints.maxShots} 镜头 · {script.lightLabels[m.constraints.lightLevel].split('（')[0]}</span>
+        <span className={`sh-grade ${m.result.flags.infeasible ? 'x' : ''}`}>{m.result.tier} · {m.result.score}</span>
+      </div>)}
+    </section>}
+  </main>
+}
+
+function NeedChips({plan, script, constraints}) {
+  const venueLabel = script.venueLabels[plan.venue] || SHOOT_ROLE_LABELS[plan.venue] || plan.venue
+  const lightWarn = plan.light > constraints.lightLevel
+  const timeLabel = plan.time === 'any' ? '时间不限' : script.timeLabels[plan.time]
+  return <div className="sh-needs">
+    {plan.roles.length > 0 && <span><Users size={11}/> {plan.roles.map(r => SHOOT_ROLE_LABELS[r] || r).join('、')}</span>}
+    {plan.extras > 0 && <span><Users size={11}/> 群演 ×{plan.extras}</span>}
+    {plan.venue !== 'any' && <span><MapPin size={11}/> {venueLabel}</span>}
+    {plan.time !== 'any' && <span><Clock3 size={11}/> {timeLabel}</span>}
+    <span className={lightWarn ? 'warn' : ''}><Lightbulb size={11}/> 需{['现场光', '实用光', '大灯组'][plan.light]}{lightWarn ? '（不足）' : ''}</span>
+    <span><Film size={11}/> {plan.shots} 镜</span>
+  </div>
+}
+
+function BeatDecision({beat, index, value, constraints, script, blockedReason, onChange}) {
+  const keepBlocked = (() => {
+    const plan = beatPlan(beat, 'keep')
+    if (plan.venue !== 'any' && !constraints.venues.includes(plan.venue)) return '需要的场地不在条件内'
+    if (!timeOk(plan.time, constraints.timeWindow)) return '档期时间窗不允许'
+    return null
+  })()
+  return <article className="sh-beat">
+    <div className="sh-beat-head">
+      <span className="sh-beat-code">{beat.code}</span>
+      <div>
+        <h3>{beat.title}</h3>
+        <p>{beat.description}</p>
+      </div>
+      <span className={`sh-key ${beat.importance}`}>{beat.importance === 'key' ? '关键节拍' : '辅助节拍'}</span>
+    </div>
+    <p className="sh-meaning"><HeartCrack size={12}/> 它承担的表达：{beat.meaning}</p>
+    <div className="sh-options">
+      <button type="button" disabled={keepBlocked} className={`sh-option keep ${value === 'keep' ? 'selected' : ''}`} onClick={() => onChange('keep')}>
+        <span className="sh-option-label"><Check size={13}/> 保留原样</span>
+        <NeedChips plan={beatPlan(beat, 'keep')} script={script} constraints={constraints}/>
+        {keepBlocked && <small className="sh-blocked"><X size={11}/> {keepBlocked}</small>}
+      </button>
+      {beat.adaptations.map(a => {
+        const venueBad = a.venue !== 'any' && !constraints.venues.includes(a.venue)
+        const timeBad = !timeOk(a.time, constraints.timeWindow)
+        const reason = venueBad ? '场地不在条件内' : timeBad ? '时间窗冲突' : null
+        return <button type="button" key={a.id} disabled={reason} className={`sh-option adapt ${value === a.id ? 'selected' : ''}`} onClick={() => onChange(a.id)}>
+          <span className="sh-option-label"><RotateCcw size={13}/> {a.label}</span>
+          <small className="sh-adapt-note">{a.note}</small>
+          <NeedChips plan={a} script={script} constraints={constraints}/>
+          {reason && <small className="sh-blocked"><X size={11}/> {reason}</small>}
+        </button>
+      })}
+      <button type="button" className={`sh-option cut ${value === 'cut' ? 'selected' : ''}`} onClick={() => onChange('cut')}>
+        <span className="sh-option-label"><X size={13}/> 舍弃不拍</span>
+        <small className="sh-adapt-note">银幕上将不再有这一段——它承担的表达也要一起放弃。</small>
+      </button>
+    </div>
+    {blockedReason && value && value !== 'cut' && <p className="sh-beat-warn"><AlertTriangle size={12}/> {blockedReason}</p>}
+  </article>
+}
+
+function ScoreGauge({label, value, suffix, tone, hint}) {
+  return <div className="sh-gauge">
+    <div className="sh-gauge-top"><span>{label}</span><b className={tone}>{value}{suffix}</b></div>
+    <div className="sh-gauge-track"><span className={tone} style={{ width: `${Math.max(2, Math.min(100, value))}%` }}/></div>
+    <small>{hint}</small>
+  </div>
+}
+
+function ShootResult({result, strategy, onEdit}) {
+  const infeasible = result.flags.infeasible
+  return <section className="sh-result">
+    <div className="sh-result-head">
+      <div>
+        <p className="eyebrow"><span className="dot"/> 方案评估</p>
+        <h2>{infeasible ? '这套方案，在纸面上就拍不出来。' : result.tierTitle}</h2>
+      </div>
+      <div className={`sh-score ${infeasible ? 'x' : ''}`}>
+        <b>{result.tier}</b>
+        <span>{result.score}<small>/100</small></span>
+      </div>
+    </div>
+    {infeasible && <p className="sh-result-tag"><AlertTriangle size={14}/> 先让方案在条件内成立，再谈表达好坏。</p>}
+    <div className="sh-gauges">
+      <ScoreGauge label="执行可行度" value={result.complexityScore} suffix="" tone={result.complexityScore >= 70 ? 'good' : result.complexityScore >= 45 ? 'mid' : 'bad'} hint="占用越接近/超出条件，现场代价越高——但零代价不等于好方案" />
+      <ScoreGauge label="表达保留度" value={result.retentionScore} suffix="" tone={result.retentionScore >= 70 ? 'good' : result.retentionScore >= 45 ? 'mid' : 'bad'} hint={`舍弃与折损合计让表达损失了 ${result.expressionLoss} 分`} />
+      {result.ingenuity > 0 && <div className="sh-craft"><Sparkles size={15}/><b>改编巧思 +{result.ingenuity}</b><small>多处用换拍法保住了表达，而不是硬砍预算</small></div>}
+    </div>
+    <div className="sh-usage">
+      <span className={result.flags.castOver ? 'over' : ''}>演员 {result.usage.cast}/{result.usage.castLimit}</span>
+      <span className={result.flags.extrasOver ? 'over' : ''}>群演 {result.usage.extras}/{result.usage.extrasLimit}</span>
+      <span className={result.flags.shotsOver ? 'over' : ''}>镜头 {result.usage.shots}/{result.usage.shotsLimit}</span>
+      <span className={result.flags.lightShortage ? 'warn' : ''}>灯光缺口 {result.flags.lightShortage}</span>
+      <span>舍弃 {result.flags.cutCount} · 改编 {result.flags.adaptCount} · 原样 {result.flags.keepCount}</span>
+    </div>
+    {strategy && <blockquote className="sh-strategy-said">“{strategy}”</blockquote>}
+    <ul className="sh-notes">{result.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
+    <button className="ghost" onClick={onEdit}><Pencil size={13}/> 修改方案，再做一轮取舍</button>
+  </section>
 }
 
 function Archive({progress,modules,history,onOpenWorkbench}) {

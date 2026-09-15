@@ -2,6 +2,7 @@ import express from 'express'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
+import { randomInt, randomBytes } from 'node:crypto'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const db = new DatabaseSync(path.join(__dirname, 'lab.db'))
@@ -9,7 +10,9 @@ db.exec(`CREATE TABLE IF NOT EXISTS progress (id INTEGER PRIMARY KEY, completed 
 CREATE TABLE IF NOT EXISTS practice (id INTEGER PRIMARY KEY AUTOINCREMENT, module_id TEXT NOT NULL, answer TEXT NOT NULL, score INTEGER NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS completed_module (module_id TEXT PRIMARY KEY, completed_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS director_project (id INTEGER PRIMARY KEY AUTOINCREMENT, theme TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, completed_at TEXT);
-CREATE TABLE IF NOT EXISTS director_step (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL, step_id TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(project_id, step_id));`)
+CREATE TABLE IF NOT EXISTS director_step (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL, step_id TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(project_id, step_id));
+CREATE TABLE IF NOT EXISTS shoot_condition_mission (id INTEGER PRIMARY KEY AUTOINCREMENT, seed TEXT NOT NULL UNIQUE, constraints TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS shoot_condition_decision (id INTEGER PRIMARY KEY AUTOINCREMENT, mission_id INTEGER NOT NULL UNIQUE, decisions TEXT NOT NULL, strategy TEXT NOT NULL, result TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);`)
 const count = db.prepare('SELECT COUNT(*) as count FROM progress').get().count
 if (!count) db.prepare('INSERT INTO progress (id, completed, streak, updated_at) VALUES (1, 2, 3, ?)').run(new Date().toISOString())
 if (!db.prepare('SELECT COUNT(*) as count FROM completed_module').get().count) {
@@ -115,6 +118,316 @@ const directorSteps = [
     ]
   }
 ]
+
+/* ---------------- 拍摄条件决策模拟 ---------------- */
+
+// 固定剧本：《等不到的人》—— 雨夜便利店
+// 每个节拍标注它对表达的作用、原始资源需求；adapt 是“在受限条件下变通”的具体拍法。
+// 复杂度权重不出库给前端，避免照着数字解题。
+const shootScript = {
+  id: 'rainy-store',
+  title: '《等不到的人》',
+  logline: '雨夜，女孩在便利店门口等一个没有出现的人。',
+  synopsis: '六分钟的短片，只有一夜、一扇门。从她抵达，到她离开——所有的“戏”都发生在等待里。',
+  venueLabels: { store: '便利店店内', door: '便利店门口', street: '店外街道' },
+  timeLabels: { day: '白天', dusk: '黄昏', night: '深夜' },
+  lightLabels: { 2: '大灯组（可调色温的大型影视灯）', 1: '单一实用光源（店里的日光灯）', 0: '仅有现场光' },
+  beats: [
+    {
+      id: 'empty-street',
+      code: 'S-01',
+      title: '空街：她先被空间吞没',
+      description: '远景。雨里的空街，一个很小的人影从画面深处走来，在便利店门口停下。空间先于人物抵达。',
+      meaning: '让观众先感到“空旷”——孤独是在她出现之前就存在的。',
+      importance: 'key',
+      roles: ['girl'],
+      extras: 0,
+      venue: 'street',
+      time: 'night',
+      light: 2,
+      shots: 2,
+      weight: 18,
+      baseComplexity: 2,
+      adaptations: [
+        { id: 'store-window', label: '改为店内侧拍：隔着玻璃门拍她停下的脚步，雨水糊在玻璃上', note: '保留“被框住的孤独”，代价是放弃空街的尺度感。', roles: ['girl'], extras: 0, venue: 'door', time: 'night', light: 1, shots: 1, fidelity: 0.6, complexity: 1 },
+        { id: 'sound-only', label: '改为纯声音：只留雨声与渐近的脚步，画面停在湿掉的霓虹招牌', note: '把空间交给观众的想象，但不再“看见”她的渺小。', roles: [], extras: 0, venue: 'any', time: 'any', light: 0, shots: 1, fidelity: 0.45, complexity: 0 }
+      ]
+    },
+    {
+      id: 'unspoken',
+      code: 'S-02',
+      title: '没说出口的那句话',
+      description: '中近景。她推门进去又退回来，对店员欲言又止，最后只说“没事”。',
+      meaning: '建立她在等谁、为什么不能开口问——人物从动作里长出来。',
+      importance: 'key',
+      roles: ['girl', 'clerk'],
+      extras: 0,
+      venue: 'store',
+      time: 'night',
+      light: 1,
+      shots: 3,
+      weight: 16,
+      baseComplexity: 1,
+      adaptations: [
+        { id: 'self-checkout', label: '店员改为自助结账机：她对着机器停顿，把那句话咽回去', note: '倾诉对象变成机器，反而强化“无人可说”。', roles: ['girl'], extras: 0, venue: 'store', time: 'any', light: 1, shots: 2, fidelity: 0.7, complexity: 0 },
+        { id: 'phone-draft', label: '改为手机屏幕特写：对话框里打了又删的一行字', note: '信息更直白，但少了面对活人时的窘迫。', roles: ['girl'], extras: 0, venue: 'any', time: 'any', light: 0, shots: 1, fidelity: 0.55, complexity: 0 }
+      ]
+    },
+    {
+      id: 'memory',
+      code: 'S-03',
+      title: '回忆：站台',
+      description: '暖色闪回。白天的站台，另一个人替她围上围巾，说“我很快回来”。',
+      meaning: '给观众一个可以被辜负的约定——没有它，等待就没有重量。',
+      importance: 'key',
+      roles: ['girl', 'other'],
+      extras: 0,
+      venue: 'platform',
+      time: 'day',
+      light: 2,
+      shots: 2,
+      weight: 18,
+      baseComplexity: 4,
+      adaptations: [
+        { id: 'keepsake', label: '不拍闪回：特写她手里攥着的旧围巾/票根，用色彩与声音暗示', note: '约定变成一个物件，观众自己补全温度。', roles: [], extras: 0, venue: 'any', time: 'any', light: 0, shots: 1, fidelity: 0.5, complexity: 1 },
+        { id: 'shelf-flash', label: '在店内借位：暖色货架做背景，一只画外的手递来围巾', note: '保住“被照顾”的触感，但回忆失去了自己的空间。', roles: ['girl'], extras: 0, venue: 'store', time: 'any', light: 1, shots: 1, fidelity: 0.65, complexity: 2 },
+        { id: 'day-aisle', label: '白天补拍：在货架之间拍一个三秒钟的暖光短闪回', note: '闪回有了真实的光与人，但要额外占用白天档期，还得让观众明确“跳回了过去”。', roles: ['girl', 'other'], extras: 0, venue: 'store', time: 'day', light: 1, shots: 1, fidelity: 0.72, complexity: 3 }
+      ]
+    },
+    {
+      id: 'clock',
+      code: 'S-04',
+      title: '时间过去：一组等待蒙太奇',
+      description: '时钟、冷掉的咖啡、门口每一次被推开都不是他。等待被切成碎片。',
+      meaning: '让观众亲身体验时间被拉长——这是全片的“呼吸”。',
+      importance: 'supporting',
+      roles: ['girl'],
+      extras: 0,
+      venue: 'store',
+      time: 'night',
+      light: 1,
+      shots: 5,
+      weight: 14,
+      baseComplexity: 2,
+      adaptations: [
+        { id: 'single-take', label: '压成一个固定长镜头：让真实时间在镜头里流过去', note: '镜头更少，却可能更煎熬——用真实时间代替剪辑时间。', roles: ['girl'], extras: 0, venue: 'store', time: 'any', light: 0, shots: 1, fidelity: 0.75, complexity: 1 },
+        { id: 'coffee-only', label: '只留咖啡：从冒热气到结出冷凝水，一个镜头交代时间', note: '极简，但等待的反复失落被抹平了。', roles: [], extras: 0, venue: 'any', time: 'any', light: 0, shots: 1, fidelity: 0.4, complexity: 0 }
+      ]
+    },
+    {
+      id: 'crowd',
+      code: 'S-05',
+      title: '人群：每个进门的人都不是他',
+      description: '三组路人鱼贯进店，她一次次抬头，又一次次低下头。',
+      meaning: '用陌生人的喧闹反衬她——世界并不为一个人的等待停步。',
+      importance: 'supporting',
+      roles: ['girl', 'clerk'],
+      extras: 3,
+      venue: 'store',
+      time: 'night',
+      light: 1,
+      shots: 3,
+      weight: 14,
+      baseComplexity: 3,
+      adaptations: [
+        { id: 'one-stranger', label: '只留一个路人：一次抬头、一次落空，其余交给门铃声暗示', note: '少了群像的压迫，但一次落空也可以很疼。', roles: ['girl'], extras: 1, venue: 'store', time: 'any', light: 1, shots: 2, fidelity: 0.6, complexity: 1 },
+        { id: 'door-bell', label: '不拍人：只拍门被推开、门铃响，她的眼神在画外变化', note: '彻底绕开演员调度，落空变成一种声音节奏。', roles: ['girl'], extras: 0, venue: 'door', time: 'any', light: 0, shots: 2, fidelity: 0.5, complexity: 0 }
+      ]
+    },
+    {
+      id: 'leave',
+      code: 'S-06',
+      title: '离开：她走进雨里',
+      description: '她把没送出的围巾留在柜台上，推门离开，没有回头。镜头留在空掉的座位。',
+      meaning: '最后停在“空”上——观众带走的不是答案，是那个位置。',
+      importance: 'key',
+      roles: ['girl', 'clerk'],
+      extras: 0,
+      venue: 'door',
+      time: 'night',
+      light: 1,
+      shots: 2,
+      weight: 20,
+      baseComplexity: 2,
+      adaptations: [
+        { id: 'seat-shot', label: '店员不出镜：她起身离开，镜头只留在空座位与留下的围巾', note: '结尾的“空”被保留，放弃的只是视线交接。', roles: ['girl'], extras: 0, venue: 'store', time: 'any', light: 0, shots: 1, fidelity: 0.75, complexity: 0 },
+        { id: 'from-inside', label: '改为店内视角：透过玻璃看她走进雨里，门在画面前合上', note: '观众被留在店里，和她之间隔着一层永远的玻璃。', roles: ['girl'], extras: 0, venue: 'door', time: 'night', light: 1, shots: 1, fidelity: 0.7, complexity: 1 }
+      ]
+    }
+  ]
+}
+
+// 返回给前端的剧本：隐去权重与复杂度，只保留做决定需要的信息
+const publicScript = () => ({
+  ...shootScript,
+  beats: shootScript.beats.map(({ weight, baseComplexity, ...beat }) => ({
+    ...beat,
+    adaptations: beat.adaptations.map(({ fidelity, complexity, ...a }) => a)
+  }))
+})
+
+const venuePool = ['store', 'door', 'street']
+const rollChance = (p) => randomBytes(4).readUInt32BE(0) / 0x100000000 < p
+
+const generateConstraints = () => {
+  // 场地：每个独立 60% 概率，至少保留一个
+  let venues = venuePool.filter(() => rollChance(0.6))
+  if (!venues.length) venues = [venuePool[randomInt(0, venuePool.length)]]
+  const timeRoll = randomInt(0, 10)
+  const timeWindow = timeRoll < 4 ? 'night' : timeRoll < 7 ? 'dusk' : 'day'
+  return {
+    actors: randomInt(1, 4),       // 能出镜的演员人数（不含路人）
+    extras: randomInt(0, 3),       // 可调度的群演人数
+    venues,
+    timeWindow,                    // day | dusk | night；any 不受限
+    lightLevel: randomInt(0, 3),   // 0 现场光 / 1 实用光 / 2 大灯组
+    maxShots: randomInt(3, 9)      // 最终成片最多保留的镜头数
+  }
+}
+
+const TIERS = [
+  { min: 90, label: 'S', title: '受限中的创造' },
+  { min: 80, label: 'A', title: '清醒的取舍' },
+  { min: 68, label: 'B', title: '成立的妥协' },
+  { min: 55, label: 'C', title: '勉强可执行' },
+  { min: 0, label: 'D', title: '还没找到拍法' }
+]
+
+const evaluatePlan = (constraints, decisions) => {
+  const beatMap = Object.fromEntries(shootScript.beats.map(b => [b.id, b]))
+  const chosen = {}
+  let rawComplexity = 0
+  let lossPoints = 0
+  let cutCount = 0
+  let keepCount = 0
+  let smartAdapt = 0
+  const roles = new Set()
+  let extrasNeeded = 0
+  let shotsNeeded = 0
+  const lightGaps = []
+
+  for (const beat of shootScript.beats) {
+    const action = decisions[beat.id]
+    if (action === 'cut') {
+      chosen[beat.id] = { action: 'cut' }
+      lossPoints += beat.weight
+      cutCount++
+      continue
+    }
+    let plan = null
+    if (action === 'keep') {
+      plan = { kind: 'keep', label: '按原剧本拍摄', roles: beat.roles, extras: beat.extras, venue: beat.venue, time: beat.time, light: beat.light, shots: beat.shots, fidelity: 1, complexity: beat.baseComplexity }
+      keepCount++
+    } else {
+      const adapt = beat.adaptations.find(a => a.id === action)
+      if (!adapt) throw Object.assign(new Error('存在无效的改编方案'), { status: 400 })
+      plan = { ...adapt, kind: 'adapt' }
+      if (adapt.fidelity >= 0.6) smartAdapt++
+    }
+    chosen[beat.id] = { action: plan.kind, optionId: plan.kind === 'adapt' ? plan.id : null, label: plan.label }
+    plan.roles.forEach(r => roles.add(r))
+    extrasNeeded = Math.max(extrasNeeded, plan.extras)
+    shotsNeeded += plan.shots
+    rawComplexity += plan.complexity
+    lossPoints += beat.weight * (1 - plan.fidelity)
+    if (plan.kind === 'adapt') rawComplexity += 1 // 改编本身需要设计与沟通成本
+    if (plan.light > constraints.lightLevel) lightGaps.push({ beat: beat.id, required: plan.light, available: constraints.lightLevel })
+  }
+
+  const castUsed = roles.size
+  const castOver = Math.max(0, castUsed - constraints.actors)
+  const extrasOver = Math.max(0, extrasNeeded - constraints.extras)
+  const shotsOver = Math.max(0, shotsNeeded - constraints.maxShots)
+  if (castOver) rawComplexity += castOver * 9
+  if (extrasOver) rawComplexity += extrasOver * 4
+  if (shotsOver) rawComplexity += shotsOver * 3
+  // 灯不够不会让拍摄物理上停摆，但每个缺口都意味着布光妥协与画面风险
+  rawComplexity += lightGaps.length * 5
+
+  const complexityScore = Math.max(4, Math.round(100 - rawComplexity * (100 / 55)))
+  const expressionLoss = Math.round(lossPoints)
+  const retentionScore = 100 - expressionLoss
+
+  // 不按成本最低评分：把全部砍掉（复杂度 0）的方案表达分为 0，总分自然垫底
+  let score = Math.round(retentionScore * 0.62 + complexityScore * 0.38)
+  // 高保真改编奖励：用巧思把“拍不起”变成“换一种说法”
+  let ingenuity = 0
+  if (smartAdapt >= 2) {
+    ingenuity = Math.min(6, 2 + smartAdapt)
+    score += ingenuity
+  }
+  // 演员、群演、镜头超支 = 物理上做不到；灯光不足只计代价，仍可“硬拍”
+  const infeasible = Boolean(castOver || extrasOver || shotsOver)
+  if (infeasible) score = Math.min(score, 54)
+  score = Math.max(0, Math.min(100, score))
+
+  const tier = TIERS.find(t => score >= t.min)
+
+  // 导演式反馈：针对具体选择，而不是泛泛打分
+  const notes = []
+  if (cutCount === shootScript.beats.length) {
+    notes.push('全部舍弃确实“零成本”，但银幕上将什么都不剩下——条件再差，导演的工作也是找出那个非拍不可的核。')
+  } else {
+    for (const beat of shootScript.beats) {
+      const c = chosen[beat.id]
+      if (c.action === 'cut' && beat.importance === 'key') {
+        notes.push(`「${beat.title}」承担着关键表达（${beat.meaning}），舍弃它意味着你需要用别的部分补回这个功能——观众还接得住吗？`)
+      } else if (c.action === 'adapt') {
+        const adapt = beat.adaptations.find(a => a.id === c.optionId)
+        notes.push(`「${beat.title}」改为「${adapt.label.replace(/：.*$/, '')}」——${adapt.note}`)
+      }
+    }
+    if (keepCount === shootScript.beats.length) {
+      notes.push('六个节拍全部按原剧本保留是最“贵”的拍法：如果条件真的允许，当然完整；但导演的价值往往正体现在没有条件的时候。')
+    } else if (!infeasible && smartAdapt >= 2) {
+      notes.push('你没有硬撑原方案，也没有简单放弃——把限制变成了新的表达方式，这正是片场里导演每天在做的事。')
+    } else if (!infeasible && cutCount >= 3) {
+      notes.push('方案很省，但连续的舍弃正在抽空这场戏的呼吸。问问自己：省下的镜头里，有没有其实换个拍法就能留下的？')
+    }
+  }
+  if (lightGaps.length) notes.push(`有 ${lightGaps.length} 个节拍需要的灯光超出了现有条件，要么换拍法，要么接受无法掌控的画面风险。`)
+  if (castOver) notes.push(`演员超员 ${castOver} 人：临时加人在真实片场意味着档期、预算与排期的连锁代价。`)
+  if (extrasOver) notes.push(`群演超员 ${extrasOver} 人。`)
+  if (shotsOver) notes.push(`镜头数超出上限 ${shotsOver} 个：成片时长与剪辑节奏都会失控，试着合并或取舍。`)
+  if (!infeasible && cutCount < shootScript.beats.length) notes.push('方案在现有条件下可执行。最后确认一件事：观众离开时，心里留下的东西还在吗？')
+
+  return {
+    score, tier: tier.label, tierTitle: tier.title,
+    complexityScore, expressionLoss, retentionScore, ingenuity,
+    usage: { cast: castUsed, castLimit: constraints.actors, extras: extrasNeeded, extrasLimit: constraints.extras, shots: shotsNeeded, shotsLimit: constraints.maxShots, lightGaps: lightGaps.length },
+    flags: { infeasible, castOver, extrasOver, shotsOver, lightShortage: lightGaps.length, cutCount, keepCount, adaptCount: shootScript.beats.length - cutCount - keepCount },
+    notes
+  }
+}
+
+const serializeMission = (row) => {
+  const decisionRow = db.prepare('SELECT decisions, strategy, result, created_at as decidedAt FROM shoot_condition_decision WHERE mission_id=?').get(row.id)
+  return {
+    id: row.id,
+    seed: row.seed,
+    constraints: JSON.parse(row.constraints),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    decided: Boolean(decisionRow),
+    decidedAt: decisionRow?.decidedAt || null,
+    decisions: decisionRow ? JSON.parse(decisionRow.decisions) : null,
+    strategy: decisionRow?.strategy || '',
+    result: decisionRow ? JSON.parse(decisionRow.result) : null
+  }
+}
+
+// 随机条件只在服务端生成一次，并随任务落库；前端刷新只会取回同一条任务
+const ensureDailyMission = () => {
+  const seed = new Date().toISOString().slice(0, 10)
+  let row = db.prepare('SELECT * FROM shoot_condition_mission WHERE seed=?').get(seed)
+  if (!row) {
+    const now = new Date().toISOString()
+    db.prepare('INSERT INTO shoot_condition_mission (seed, constraints, created_at, updated_at) VALUES (?, ?, ?, ?)')
+      .run(seed, JSON.stringify(generateConstraints()), now, now)
+    row = db.prepare('SELECT * FROM shoot_condition_mission WHERE seed=?').get(seed)
+  }
+  return row
+}
 
 const clipText = (value, max = 80) => {
   const text = String(value ?? '').trim()
@@ -249,6 +562,86 @@ app.post('/api/workbench/projects/:id/complete', (req, res) => {
   const now = new Date().toISOString()
   db.prepare('UPDATE director_project SET status=?, completed_at=?, updated_at=? WHERE id=?').run('completed', now, now, row.id)
   res.json(serializeProject(getProjectRow(row.id)))
+})
+
+// 「拍摄条件决策」模拟 API
+app.get('/api/shoot/script', (_, res) => res.json(publicScript()))
+app.post('/api/shoot/missions', (_, res) => {
+  const row = ensureDailyMission()
+  res.status(201).json(serializeMission(row))
+})
+app.get('/api/shoot/missions/latest', (_, res) => {
+  const seed = new Date().toISOString().slice(0, 10)
+  const row = db.prepare('SELECT * FROM shoot_condition_mission WHERE seed=?').get(seed)
+  if (!row) return res.status(404).json({ error: 'today mission not created yet' })
+  res.json(serializeMission(row))
+})
+app.get('/api/shoot/missions', (_, res) => {
+  const rows = db.prepare('SELECT m.*, d.result FROM shoot_condition_mission m LEFT JOIN shoot_condition_decision d ON d.mission_id=m.id ORDER BY m.id DESC LIMIT 14').all()
+  res.json(rows.map(row => ({
+    id: row.id,
+    seed: row.seed,
+    constraints: JSON.parse(row.constraints),
+    createdAt: row.created_at,
+    decided: Boolean(row.result),
+    result: row.result ? JSON.parse(row.result) : null
+  })))
+})
+app.get('/api/shoot/missions/:id', (req, res) => {
+  const row = db.prepare('SELECT * FROM shoot_condition_mission WHERE id=?').get(Number(req.params.id))
+  if (!row) return res.status(404).json({ error: 'mission not found' })
+  res.json(serializeMission(row))
+})
+app.put('/api/shoot/missions/:id/decision', (req, res) => {
+  const row = db.prepare('SELECT * FROM shoot_condition_mission WHERE id=?').get(Number(req.params.id))
+  if (!row) return res.status(404).json({ error: 'mission not found' })
+  const constraints = JSON.parse(row.constraints)
+  const incoming = req.body?.decisions
+  const strategy = String(req.body?.strategy ?? '').trim()
+  if (!incoming || typeof incoming !== 'object') return res.status(400).json({ error: 'decisions object is required' })
+  if (strategy.length < 8) return res.status(400).json({ error: '先写下你的整体策略：在这些限制下，你最想保住的是什么？' })
+
+  const decisions = {}
+  for (const beat of shootScript.beats) {
+    const action = incoming[beat.id]
+    if (!['keep', 'cut'].includes(action) && !beat.adaptations.some(a => a.id === action)) {
+      return res.status(400).json({ error: `「${beat.title}」还没有做出决定` })
+    }
+    // 硬约束校验：保留/改编所需的场地与时间窗必须在条件内（“any”不受限）
+    const plan = action === 'keep'
+      ? { venue: beat.venue, time: beat.time }
+      : action === 'cut'
+        ? null
+        : (() => { const a = beat.adaptations.find(x => x.id === action); return { venue: a.venue, time: a.time } })()
+    if (plan) {
+      if (plan.venue !== 'any' && !constraints.venues.includes(plan.venue)) {
+        return res.status(400).json({ error: `「${beat.title}」需要的场地不在可用范围内，这个拍法在当前条件下无法执行` })
+      }
+      if (plan.time !== 'any' && constraints.timeWindow === 'day' && plan.time === 'night') {
+        return res.status(400).json({ error: `「${beat.title}」需要夜戏，但今天只有白天的拍摄窗口` })
+      }
+      if (plan.time !== 'any' && constraints.timeWindow === 'night' && plan.time === 'day') {
+        return res.status(400).json({ error: `「${beat.title}」需要日戏，但今天只有夜间的拍摄窗口` })
+      }
+    }
+    decisions[beat.id] = action
+  }
+
+  let result
+  try { result = evaluatePlan(constraints, decisions) }
+  catch (error) { return res.status(error.status || 400).json({ error: error.message }) }
+
+  const existed = db.prepare('SELECT id FROM shoot_condition_decision WHERE mission_id=?').get(row.id)
+  const now = new Date().toISOString()
+  if (existed) {
+    db.prepare('UPDATE shoot_condition_decision SET decisions=?, strategy=?, result=?, updated_at=? WHERE mission_id=?')
+      .run(JSON.stringify(decisions), strategy.slice(0, 2000), JSON.stringify(result), now, row.id)
+  } else {
+    db.prepare('INSERT INTO shoot_condition_decision (mission_id, decisions, strategy, result, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(row.id, JSON.stringify(decisions), strategy.slice(0, 2000), JSON.stringify(result), now, now)
+  }
+  db.prepare('UPDATE shoot_condition_mission SET updated_at=? WHERE id=?').run(now, row.id)
+  res.status(existed ? 200 : 201).json(serializeMission(db.prepare('SELECT * FROM shoot_condition_mission WHERE id=?').get(row.id)))
 })
 
 app.use('/api', (_, res) => res.status(404).json({ error: 'API route not found' }))
