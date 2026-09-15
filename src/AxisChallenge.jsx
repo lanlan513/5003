@@ -201,7 +201,7 @@ export default function AxisChallenge() {
             </div>
             <div className="axis-bar-side">
               <span className="axis-best"><Trophy size={12} /> 最佳 {best}</span>
-              <span className="axis-score">本轮累计 {total + (phase === 'review' ? roundScore(selected, challenge) : 0)}</span>
+              <span className="axis-score">本轮累计 {total}</span>
             </div>
           </div>
 
