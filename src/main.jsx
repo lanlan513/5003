@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { AlertTriangle, ArrowUpRight, ArrowLeft, BookOpen, Camera, Check, ChevronRight, Clapperboard, Clock3, Compass, Eye, FileText, Film, FolderOpen, Headphones, HeartCrack, Layers3, Lightbulb, MapPin, Menu, Pencil, PenLine, RotateCcw, Save, Sparkles, Users, Volume2, X, Zap } from 'lucide-react'
+import { AlertTriangle, ArrowUpRight, ArrowLeft, BookOpen, Camera, Check, ChevronRight, Clapperboard, Clock3, CloudRain, Compass, Eye, FileText, Film, FolderOpen, GitBranch, Headphones, HeartCrack, Layers3, Lightbulb, MapPin, Menu, Package, Pencil, PenLine, RotateCcw, Save, Sparkles, Users, Volume2, X, Zap } from 'lucide-react'
 import './styles.css'
 
 const api = async (url, options) => {
@@ -19,6 +19,8 @@ function App() {
   const [answer, setAnswer] = useState(null)
   const [menu, setMenu] = useState(false)
   const [view, setView] = useState('lab')
+  // 进入现场决策时携带 nonce，使每次点击都重新进入片场
+  const [onsetRequest, setOnsetRequest] = useState(null)
   // 进入拍摄决策时携带 nonce，使每次点击都重新拉取当日任务
   const [shootRequest, setShootRequest] = useState(null)
   const [submitting, setSubmitting] = useState(false)
@@ -34,6 +36,7 @@ function App() {
   const openModule = (id) => { setActive(id); setAnswer(null); setView('lab'); window.scrollTo({ top: 0, behavior: 'smooth' }) }
   const enterWorkbench = (projectId = null) => { setBenchRequest({ projectId, nonce: Date.now() }); setView('workbench'); setMenu(false); window.scrollTo({ top: 0 }) }
   const enterShoot = () => { setShootRequest({ nonce: Date.now() }); setView('shoot'); setMenu(false); window.scrollTo({ top: 0 }) }
+  const enterOnset = () => { setOnsetRequest({ nonce: Date.now() }); setView('onset'); setMenu(false); window.scrollTo({ top: 0 }) }
   const submit = async (choice) => {
     if (answer || submitting || !activeModule) return
     setSubmitting(true)
@@ -50,12 +53,13 @@ function App() {
   return <div className="app-shell">
     <header className="topbar">
       <a className="brand" href="#top" onClick={()=>setView('lab')}><span className="brand-mark"><Clapperboard size={16}/></span><span>导演学习实验室</span><em>DIRECTOR'S LAB</em></a>
-      <nav className={menu ? 'nav open' : 'nav'}><button className={view==='lab'?'active':''} onClick={()=>{setView('lab');setMenu(false)}}>今日片场</button><button className={view==='workbench'?'active':''} onClick={()=>enterWorkbench()}>导演工作台</button><button className={view==='shoot'?'active':''} onClick={enterShoot}>拍摄决策</button><button className={view==='archive'?'active':''} onClick={()=>{setView('archive');setMenu(false)}}>学习档案</button><button onClick={()=>{setView('lab');setMenu(false);setTimeout(()=>document.querySelector('#about')?.scrollIntoView({behavior:'smooth'}),0)}}>关于实验室</button></nav>
+      <nav className={menu ? 'nav open' : 'nav'}><button className={view==='lab'?'active':''} onClick={()=>{setView('lab');setMenu(false)}}>今日片场</button><button className={view==='workbench'?'active':''} onClick={()=>enterWorkbench()}>导演工作台</button><button className={view==='shoot'?'active':''} onClick={enterShoot}>拍摄决策</button><button className={view==='onset'?'active':''} onClick={enterOnset}>现场决策</button><button className={view==='archive'?'active':''} onClick={()=>{setView('archive');setMenu(false)}}>学习档案</button><button onClick={()=>{setView('lab');setMenu(false);setTimeout(()=>document.querySelector('#about')?.scrollIntoView({behavior:'smooth'}),0)}}>关于实验室</button></nav>
       <div className="top-actions"><span className="streak"><Sparkles size={14}/> {progress.streak} 天连续</span><button className="avatar">林</button><button className="menu-btn" onClick={()=>setMenu(!menu)}>{menu?<X size={20}/>:<Menu size={20}/>}</button></div>
     </header>
     {view === 'archive' ? <Archive progress={progress} modules={modules} history={history} onOpenWorkbench={enterWorkbench} />
      : view === 'workbench' ? <Workbench request={benchRequest} onBack={()=>setView('lab')} />
      : view === 'shoot' ? <ShootLab request={shootRequest} onBack={()=>setView('lab')} />
+     : view === 'onset' ? <OnsetLab request={onsetRequest} onBack={()=>setView('lab')} />
      : <>
       <section className="hero" id="top">
         <div className="hero-copy"><p className="eyebrow"><span className="dot"/> WEEK 02 · 场景实验</p><h1>一场戏，<br/><i>从哪里开始？</i></h1><p className="hero-lede">导演不是把答案拍出来的人。<br/>是决定观众<strong>先感受到什么</strong>的人。</p><button className="primary" onClick={()=>openModule('shot')}>进入今日片场 <ArrowUpRight size={17}/></button></div>
@@ -66,6 +70,7 @@ function App() {
       </section>
       <WorkbenchIntro onStart={()=>enterWorkbench()} />
       <ShootIntro onStart={enterShoot} />
+      <OnsetIntro onStart={enterOnset} />
       <section className="quote-band" id="about"><div className="quote-mark">“</div><blockquote>电影不是被拍摄的，<br/><em>是被选择的。</em></blockquote><div className="quote-meta"><span>— 导演学习实验室</span><small>关于观看、判断与实践</small></div></section>
       <section className="continue"><div><p className="eyebrow">你的学习轨迹</p><h2>保持好奇，继续往前。</h2><p className="muted">每一次选择都会留在你的导演档案里。</p></div><div className="progress-card"><div className="progress-top"><span>本周进度</span><b>{Math.min(progress.completed, 8)} <small>/ 8 个练习</small></b></div><div className="progress-track"><span style={{width:`${Math.min(progress.completed/8*100,100)}%`}}/></div><div className="progress-foot"><span><Check size={14}/> {progress.completed} 已完成</span><span>下一个：场面调度 <ChevronRight size={14}/></span></div></div></section>
     </>}
@@ -651,6 +656,271 @@ function ShootResult({result, strategy, onEdit}) {
     {strategy && <blockquote className="sh-strategy-said">“{strategy}”</blockquote>}
     <ul className="sh-notes">{result.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
     <button className="ghost" onClick={onEdit}><Pencil size={13}/> 修改方案，再做一轮取舍</button>
+  </section>
+}
+
+/* ---------------- 导演现场决策 · 状态机片场 ---------------- */
+
+const ONSET_ICONS = { users: Users, volume: Volume2, cloud: CloudRain, package: Package, clock: Clock3, gitbranch: GitBranch }
+const ONSET_STANCE_LABEL = { protect: '守护原案', adapt: '改变方案' }
+
+function OnsetIntro({onStart}) {
+  return <section className="os-intro">
+    <div className="os-intro-copy">
+      <p className="eyebrow"><span className="dot"/> 导演现场决策 · 突发状况模拟</p>
+      <h2>分镜是完美的，<br/><i>直到第一次喊停。</i></h2>
+      <p className="muted">这一夜，演员会崩、隔壁在装修、雨提前停了、关键道具当场报废，天光却不等人。<br/>每个岔路口你<strong>只能选一种处理方式</strong>，选完立刻继续，没有撤换键——你走出的会是一条只属于自己的决策路径。</p>
+      <p className="os-intro-warn"><GitBranch size={14}/> 系统不判对错，只回答一个问题：你是在<strong>保护原始创作意图</strong>，还是在为现场条件<strong>主动改变方案</strong>？</p>
+      <button className="primary" onClick={onStart}><Clapperboard size={15}/> 进入今夜片场</button>
+    </div>
+    <div className="os-intro-board" aria-hidden="true">
+      <div className="os-clap"><Camera size={20}/><span>ON SET / NO CUT</span></div>
+      <ol className="os-events-preview">
+        <li><i><Users size={13}/></i><span>演员状态</span><b>20 min to call</b></li>
+        <li><i><Volume2 size={13}/></i><span>场地噪音</span><b>— —</b></li>
+        <li><i><CloudRain size={13}/></i><span>天气变化</span><b>rain stopped</b></li>
+        <li><i><Package size={13}/></i><span>道具损坏</span><b>!!</b></li>
+        <li><i><Clock3 size={13}/></i><span>时间不足</span><b>last window</b></li>
+      </ol>
+      <p>每个决定只有一次，路径不可回头。</p>
+    </div>
+  </section>
+}
+
+function OnsetLab({request, onBack}) {
+  const [run, setRun] = useState(null)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [lastStep, setLastStep] = useState(null)   // 刚做的选择与后果过场
+  const [history, setHistory] = useState([])
+
+  useEffect(() => {
+    let alive = true
+    setError(''); setLastStep(null)
+    // 先回到进行中的那一场；没有则由用户手动开机
+    api('/api/onset/runs/latest').catch(() => null)
+      .then(data => { if (alive) setRun(data || null) })
+      .catch(e => alive && setError(e.message))
+    api('/api/onset/runs').then(data => alive && setHistory(data)).catch(() => {})
+    return () => { alive = false }
+  }, [request?.nonce])
+
+  const startRun = async () => {
+    setBusy(true); setError('')
+    try { setRun(await api('/api/onset/runs', { method: 'POST' })) }
+    catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+  const continueBrief = async () => {
+    setBusy(true); setError('')
+    try { setRun(await api(`/api/onset/runs/${run.id}/continue`, { method: 'POST' })) }
+    catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+  const decide = async (choiceId) => {
+    if (busy || lastStep) return
+    setBusy(true); setError('')
+    try {
+      const updated = await api(`/api/onset/runs/${run.id}/decision`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ choiceId }) })
+      const step = updated.path[updated.path.length - 1]
+      setLastStep(step)
+      setRun(updated)
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+  const dismissOutcome = () => {
+    setLastStep(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    if (run.result) api('/api/onset/runs').then(setHistory).catch(() => {})
+  }
+  const newRun = async () => {
+    setBusy(true); setError(''); setLastStep(null)
+    try { setRun(await api('/api/onset/runs', { method: 'POST' })) }
+    catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+
+  return <main className="os">
+    <button className="wb-back" onClick={onBack}><ArrowLeft size={14}/> 返回今日片场</button>
+
+    {!run && <OnsetGate error={error} busy={busy} onStart={startRun} history={history} />}
+
+    {run && <>
+      <OnsetStatusBar state={run.state} tallies={run.tallies} total={run.path.length} done={Boolean(run.result)} />
+
+      {run.node?.type === 'brief' && !run.result && <OnsetBrief node={run.node} busy={busy} onContinue={continueBrief} />}
+
+      {(run.node?.type === 'incident' || run.node?.type === 'beat') && !run.result && !lastStep &&
+        <OnsetEvent node={run.node} index={run.path.length} busy={busy} error={error} onDecide={decide} />}
+
+      {lastStep && !run.result && <OnsetOutcome step={lastStep} state={run.state} onContinue={dismissOutcome} />}
+
+      {run.result && <OnsetReport result={run.result} state={run.state} tallies={run.tallies} path={run.path} busy={busy} onRestart={newRun} />}
+
+      {run.path.length > 0 && !run.result && <OnsetPathline path={run.path} />}
+      {history.length > 0 && <OnsetHistory history={history} />}
+    </>}
+  </main>
+}
+
+function OnsetGate({error, busy, onStart, history}) {
+  return <div className="os-gate">
+    <p className="eyebrow"><span className="dot"/> ON SET DECISION / 状态机驱动</p>
+    <h1>今夜，<i>状况会自己找上门。</i></h1>
+    <p className="os-gate-lede">你将在实拍夜连续遭遇五个突发状况：演员状态、场地噪音、天气变化、道具损坏、时间不足——某些处理还会引出额外的连锁局面。<br/>每个状况只能选择一种处理方式，选择立即生效、不可撤回；全部结束后，系统会沿你的决策路径给出导演立场画像。</p>
+    <ul className="os-gate-rules">
+      <li><b>守护原案</b><span>为保住剧本的原始表达，付出时间、预算或团队代价</span></li>
+      <li><b>改变方案</b><span>接受现场条件，当场发明另一种拍法</span></li>
+      <li><b>注意边界</b><span>时间耗尽、士气崩盘时，部分处理将不再可选</span></li>
+    </ul>
+    <button className="primary" disabled={busy} onClick={onStart}><Clapperboard size={15}/> {busy ? '正在通知全组……' : '全组就位，开机'}</button>
+    {error && <p className="wb-error" role="alert">{error}</p>}
+    {history.length > 0 && <section className="os-history">
+      <h3>你走过的片场夜</h3>
+      {history.map(h => <div key={h.id} className="os-history-row">
+        <span className="wb-row-index">No.{String(h.id).padStart(2, '0')}</span>
+        <span className={`os-history-kind ${h.kind}`}>{h.kind === 'collapse' ? '片场停摆' : '杀青'}</span>
+        <b>{h.profileTitle}</b>
+        <span className="muted">守 {h.protect} · 改 {h.adapt} · {fmtDate(h.finishedAt)}</span>
+      </div>)}
+    </section>}
+  </div>
+}
+
+function OnsetBrief({node, busy, onContinue}) {
+  return <section className="os-brief">
+    <p className="os-node-code">{node.code}</p>
+    <h1>{node.title}</h1>
+    {node.body.split('\n').map((line, i) => <p key={i} className="os-brief-line">{line}</p>)}
+    <button className="primary" disabled={busy} onClick={onContinue}>通知各部门，按计划开机 <ChevronRight size={15}/></button>
+  </section>
+}
+
+function OnsetStatusBar({state, tallies, total, done}) {
+  const intentTone = state.intent >= 66 ? 'good' : state.intent >= 40 ? 'mid' : 'bad'
+  const moraleTone = state.morale >= 45 ? 'good' : state.morale >= 24 ? 'mid' : 'bad'
+  return <section className={`os-status ${done ? 'done' : ''}`}>
+    <span><Clock3 size={13}/> 剩余时间 <b className={state.time < 35 ? 'bad' : ''}>{state.time}</b><small>min</small></span>
+    <span><Users size={13}/> 全组士气 <b className={moraleTone}>{state.morale}</b></span>
+    <span><HeartCrack size={13}/> 创作意图 <b className={intentTone}>{state.intent}</b></span>
+    <span><Sparkles size={13}/> 现场创造 <b>{state.craft}</b></span>
+    <span className="os-stance-count"><i className="protect">守 {tallies.protect}</i><i className="adapt">改 {tallies.adapt}</i><small>第 {Math.min(total + 1, 5)} / 5 个状况</small></span>
+  </section>
+}
+
+function OnsetEvent({node, index, busy, error, onDecide}) {
+  const Icon = ONSET_ICONS[node.category] || AlertTriangle
+  const total = node.choices.length
+  return <section className="os-event">
+    <header className="os-event-head">
+      <span className="os-event-icon"><Icon size={18}/></span>
+      <div>
+        <p className="os-node-code">{node.code} · {node.type === 'beat' ? '你的上一个选择引出的连锁局面' : `突发状况 ${index + 1} / 5`}</p>
+        <h1>{node.title}</h1>
+      </div>
+    </header>
+    <div className="os-event-body">{node.body.split('\n').map((line, i) => <p key={i}>{line}</p>)}</div>
+
+    <p className="os-choice-rule"><AlertTriangle size={13}/> 你只能选择一种处理方式；选定后立即继续拍摄，不可撤回。</p>
+    <div className="os-choices">
+      {node.choices.map((choice, i) => {
+        const blocked = Boolean(choice.blockedReason)
+        return <button key={choice.id} type="button" disabled={blocked || busy} className={`os-choice ${choice.stance}`} onClick={() => onDecide(choice.id)}>
+          <span className="os-choice-top">
+            <span className="os-choice-num">{String(i + 1).padStart(2, '0')}</span>
+            <span className={`os-stance-tag ${choice.stance}`}>{ONSET_STANCE_LABEL[choice.stance]}</span>
+          </span>
+          <b>{choice.label}</b>
+          <small>{choice.note}</small>
+          {blocked && <span className="os-choice-blocked"><X size={12}/> {choice.blockedReason}</span>}
+          <span className="os-choice-go"><ChevronRight size={16}/></span>
+        </button>
+      })}
+    </div>
+    <p className="os-choice-count muted">共 {total} 种处理方式，{total} 选 1。</p>
+    {error && <p className="wb-error" role="alert">{error}</p>}
+  </section>
+}
+
+function OnsetOutcome({step, state, onContinue}) {
+  return <section className={`os-outcome ${step.stance}`}>
+    <p className="os-node-code">TAKE RESULT · {ONSET_STANCE_LABEL[step.stance]}</p>
+    <h1>{step.outcomeTitle}</h1>
+    <p className="os-outcome-text">{step.outcome}</p>
+    <div className="os-outcome-delta">
+      <span>你选择了：<b>{step.choiceLabel}</b></span>
+      <span className={`os-stance-tag ${step.stance}`}>{step.stance === 'protect' ? '守护原始创作意图' : '为现场条件改变方案'}</span>
+    </div>
+    <p className="os-outcome-hint muted">后果已写入现场状态，下一个状况正在等你。</p>
+    <button className="primary" onClick={onContinue}>继续推进拍摄 <ChevronRight size={15}/></button>
+  </section>
+}
+
+function OnsetAxisBar({label, protect, adapt}) {
+  const total = Math.max(1, protect + adapt)
+  return <div className="os-axis">
+    <div className="os-axis-labels"><span className="protect">守护原案 ×{protect}</span><span>{label}</span><span className="adapt">改变方案 ×{adapt}</span></div>
+    <div className="os-axis-track"><span className="protect" style={{ width: `${protect / total * 100}%` }}/><span className="adapt" style={{ width: `${adapt / total * 100}%` }}/></div>
+  </div>
+}
+
+function OnsetReport({result, state, tallies, path, busy, onRestart}) {
+  const collapsed = result.kind === 'collapse'
+  return <section className={`os-report ${result.kind}`}>
+    <header className="os-report-head">
+      <p className="os-node-code">{result.code}</p>
+      <h1>{collapsed ? result.title : '天亮了，杀青'}</h1>
+      <p className="os-report-body">{result.body}</p>
+    </header>
+
+    <div className={`os-report-verdict ${result.kind}`}>
+      <span className="os-verdict-label">{collapsed ? '停摆画像' : '导演立场画像'}</span>
+      <h2>{result.profileTitle}</h2>
+      <p className="os-report-summary">{result.summary}</p>
+    </div>
+
+    <OnsetAxisBar label="守护 ↔ 改变" protect={tallies.protect} adapt={tallies.adapt} />
+
+    <div className="os-report-meters">
+      <ScoreGauge label="创作意图余量" value={state.intent} suffix="" tone={state.intent >= 66 ? 'good' : state.intent >= 40 ? 'mid' : 'bad'} hint={collapsed ? '意图还在，却失去了把它拍出来的队伍' : '原始表达在经历一夜变故后还剩下多少'} />
+      <ScoreGauge label="现场创造积累" value={state.craft} suffix="" tone={state.craft >= 55 ? 'good' : state.craft >= 25 ? 'mid' : 'bad'} hint="把意外改写成新表达所积累的导演创造" />
+      <ScoreGauge label="全组士气" value={state.morale} suffix="" tone={state.morale >= 45 ? 'good' : state.morale >= 24 ? 'mid' : 'bad'} hint={collapsed ? '正是它先到了极限' : '队伍以什么状态走出这一夜'} />
+    </div>
+
+    <blockquote className="os-report-reading">“{result.reading}”</blockquote>
+
+    <OnsetPathline path={path} expanded />
+
+    <div className="os-report-actions">
+      <button className="primary" disabled={busy} onClick={onRestart}><RotateCcw size={15}/> 再来一夜，走另一条决策路径</button>
+    </div>
+  </section>
+}
+
+function OnsetPathline({path, expanded}) {
+  return <section className={`os-pathline ${expanded ? 'expanded' : ''}`}>
+    <h3>{expanded ? '你的决策路径回放' : '已走过的决策'}</h3>
+    <ol>
+      {path.map((step, i) => (
+        <li key={i} className={step.stance}>
+          <span className="os-path-dot">{i + 1}</span>
+          <span className="os-path-main">
+            <small>{step.code}</small>
+            <b>{expanded ? step.title : step.outcomeTitle}</b>
+            {expanded && <p className="os-path-choice">{step.choiceLabel}</p>}
+          </span>
+          <span className={`os-stance-tag ${step.stance}`}>{ONSET_STANCE_LABEL[step.stance]}</span>
+        </li>
+      ))}
+    </ol>
+  </section>
+}
+
+function OnsetHistory({history}) {
+  return <section className="os-history compact">
+    <h3>此前的片场夜</h3>
+    {history.slice(0, 5).map(h => <div key={h.id} className="os-history-row">
+      <span className="wb-row-index">No.{String(h.id).padStart(2, '0')}</span>
+      <span className={`os-history-kind ${h.kind}`}>{h.kind === 'collapse' ? '片场停摆' : '杀青'}</span>
+      <b>{h.profileTitle}</b>
+      <span className="muted">守 {h.protect} · 改 {h.adapt}</span>
+    </div>)}
   </section>
 }
 

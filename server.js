@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 import { randomInt, randomBytes } from 'node:crypto'
+import { onsetGraph, advanceOnset, continueOnset, publicOnsetNode, tallyOnsetPath, initialOnsetState } from './src/onsetMachine.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const db = new DatabaseSync(path.join(__dirname, 'lab.db'))
@@ -12,7 +13,8 @@ CREATE TABLE IF NOT EXISTS completed_module (module_id TEXT PRIMARY KEY, complet
 CREATE TABLE IF NOT EXISTS director_project (id INTEGER PRIMARY KEY AUTOINCREMENT, theme TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, completed_at TEXT);
 CREATE TABLE IF NOT EXISTS director_step (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL, step_id TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(project_id, step_id));
 CREATE TABLE IF NOT EXISTS shoot_condition_mission (id INTEGER PRIMARY KEY AUTOINCREMENT, seed TEXT NOT NULL UNIQUE, constraints TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS shoot_condition_decision (id INTEGER PRIMARY KEY AUTOINCREMENT, mission_id INTEGER NOT NULL UNIQUE, decisions TEXT NOT NULL, strategy TEXT NOT NULL, result TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);`)
+CREATE TABLE IF NOT EXISTS shoot_condition_decision (id INTEGER PRIMARY KEY AUTOINCREMENT, mission_id INTEGER NOT NULL UNIQUE, decisions TEXT NOT NULL, strategy TEXT NOT NULL, result TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS onsite_run (id INTEGER PRIMARY KEY AUTOINCREMENT, status TEXT NOT NULL DEFAULT 'active', current_node TEXT NOT NULL, state TEXT NOT NULL, path TEXT NOT NULL, result TEXT, started_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT);`)
 const count = db.prepare('SELECT COUNT(*) as count FROM progress').get().count
 if (!count) db.prepare('INSERT INTO progress (id, completed, streak, updated_at) VALUES (1, 2, 3, ?)').run(new Date().toISOString())
 if (!db.prepare('SELECT COUNT(*) as count FROM completed_module').get().count) {
@@ -429,8 +431,7 @@ const ensureDailyMission = () => {
   return row
 }
 
-const clipText = (value, max = 80) => {
-  const text = String(value ?? '').trim()
+const clipText = (value, max = 80) => {  const text = String(value ?? '').trim()
   return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
@@ -642,6 +643,105 @@ app.put('/api/shoot/missions/:id/decision', (req, res) => {
   }
   db.prepare('UPDATE shoot_condition_mission SET updated_at=? WHERE id=?').run(now, row.id)
   res.status(existed ? 200 : 201).json(serializeMission(db.prepare('SELECT * FROM shoot_condition_mission WHERE id=?').get(row.id)))
+})
+
+// 「导演现场决策」状态机 API
+const serializeOnsetRun = (row) => {
+  const state = JSON.parse(row.state)
+  const path = JSON.parse(row.path)
+  const node = onsetGraph.nodes[row.current_node]
+  const result = row.result ? JSON.parse(row.result) : null
+  return {
+    id: row.id,
+    status: row.status,
+    startedAt: row.started_at,
+    updatedAt: row.updated_at,
+    finishedAt: row.finished_at || null,
+    currentNode: row.current_node,
+    node: publicOnsetNode(node, state),
+    state,
+    path,
+    tallies: tallyOnsetPath(path),
+    result
+  }
+}
+
+app.get('/api/onset/graph', (_, res) => {
+  const initial = initialOnsetState()
+  res.json({ start: onsetGraph.start, categoryMeta: onsetGraph.categoryMeta, initial, node: publicOnsetNode(onsetGraph.nodes[onsetGraph.start], initial) })
+})
+app.get('/api/onset/runs/latest', (_, res) => {
+  const row = db.prepare("SELECT * FROM onsite_run WHERE status='active' ORDER BY id DESC LIMIT 1").get()
+  if (!row) return res.status(404).json({ error: 'no active run' })
+  res.json(serializeOnsetRun(row))
+})
+app.post('/api/onset/runs', (req, res) => {
+  // 一次只推进一场：已存在进行中的运行时直接回到它，不另开副本
+  if (!req.query.fresh) {
+    const existing = db.prepare("SELECT * FROM onsite_run WHERE status='active' ORDER BY id DESC LIMIT 1").get()
+    if (existing) return res.status(200).json(serializeOnsetRun(existing))
+  } else if (process.env.LAB_TEST !== '1') {
+    return res.status(403).json({ error: 'fresh runs disabled' })
+  }
+  const now = new Date().toISOString()
+  const initialState = initialOnsetState()
+  const result = db.prepare("INSERT INTO onsite_run (status, current_node, state, path, result, started_at, updated_at) VALUES ('active', ?, ?, ?, NULL, ?, ?)")
+    .run(onsetGraph.start, JSON.stringify(initialState), JSON.stringify([]), now, now)
+  res.status(201).json(serializeOnsetRun(db.prepare('SELECT * FROM onsite_run WHERE id=?').get(result.lastInsertRowid)))
+})
+app.get('/api/onset/runs', (_, res) => {
+  const rows = db.prepare("SELECT * FROM onsite_run WHERE status='finished' ORDER BY id DESC LIMIT 12").all()
+  res.json(rows.map(row => {
+    const result = JSON.parse(row.result)
+    return {
+      id: row.id,
+      finishedAt: row.finished_at,
+      profileTitle: result.profileTitle,
+      kind: result.kind,
+      decisions: result.decisions,
+      protect: result.tallies.protect,
+      adapt: result.tallies.adapt,
+      intent: result.state.intent,
+      craft: result.state.craft
+    }
+  }))
+})
+app.get('/api/onset/runs/:id', (req, res) => {
+  const row = db.prepare('SELECT * FROM onsite_run WHERE id=?').get(Number(req.params.id))
+  if (!row) return res.status(404).json({ error: 'run not found' })
+  res.json(serializeOnsetRun(row))
+})
+app.post('/api/onset/runs/:id/continue', (req, res) => {
+  const row = db.prepare('SELECT * FROM onsite_run WHERE id=?').get(Number(req.params.id))
+  if (!row) return res.status(404).json({ error: 'run not found' })
+  if (row.status !== 'active') return res.status(409).json({ error: '这一场已经杀青' })
+  let next
+  try {
+    next = continueOnset({ currentNode: row.current_node, state: JSON.parse(row.state), path: JSON.parse(row.path) })
+  } catch (error) {
+    return res.status(error.status || 400).json({ error: error.message })
+  }
+  const now = new Date().toISOString()
+  db.prepare('UPDATE onsite_run SET current_node=?, updated_at=? WHERE id=?').run(next.currentNode, now, row.id)
+  res.status(200).json(serializeOnsetRun(db.prepare('SELECT * FROM onsite_run WHERE id=?').get(row.id)))
+})
+app.post('/api/onset/runs/:id/decision', (req, res) => {
+  const row = db.prepare('SELECT * FROM onsite_run WHERE id=?').get(Number(req.params.id))
+  if (!row) return res.status(404).json({ error: 'run not found' })
+  if (row.status !== 'active') return res.status(409).json({ error: '这一场已经杀青，不能再改决定' })
+  const choiceId = String(req.body?.choiceId ?? '')
+  let advanced
+  try {
+    advanced = advanceOnset({ currentNode: row.current_node, state: JSON.parse(row.state), path: JSON.parse(row.path) }, choiceId)
+  } catch (error) {
+    return res.status(error.status || 400).json({ error: error.message })
+  }
+  const now = new Date().toISOString()
+  const finished = Boolean(advanced.result)
+  db.prepare('UPDATE onsite_run SET status=?, current_node=?, state=?, path=?, result=?, updated_at=?, finished_at=? WHERE id=?')
+    .run(finished ? 'finished' : 'active', advanced.currentNode, JSON.stringify(advanced.state), JSON.stringify(advanced.path),
+      advanced.result ? JSON.stringify(advanced.result) : null, now, finished ? now : null, row.id)
+  res.status(200).json(serializeOnsetRun(db.prepare('SELECT * FROM onsite_run WHERE id=?').get(row.id)))
 })
 
 app.use('/api', (_, res) => res.status(404).json({ error: 'API route not found' }))
