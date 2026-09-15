@@ -723,6 +723,8 @@ function OnsetLab({request, onBack}) {
       const step = updated.path[updated.path.length - 1]
       setLastStep(step)
       setRun(updated)
+      // 走到终局时没有“后果过场”页可关闭，往期列表需要在这里立即刷新
+      if (updated.result) api('/api/onset/runs').then(setHistory).catch(() => {})
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
   const dismissOutcome = () => {
@@ -736,18 +738,21 @@ function OnsetLab({request, onBack}) {
     catch (e) { setError(e.message) } finally { setBusy(false) }
   }
 
+  // 进度只统计真正的突发事件（incident）；连锁分支（beat，category=branch）不占状况序号
+  const incidentCount = run ? run.path.filter(step => step.category !== 'branch').length : 0
+
   return <main className="os">
     <button className="wb-back" onClick={onBack}><ArrowLeft size={14}/> 返回今日片场</button>
 
     {!run && <OnsetGate error={error} busy={busy} onStart={startRun} history={history} />}
 
     {run && <>
-      <OnsetStatusBar state={run.state} tallies={run.tallies} total={run.path.length} done={Boolean(run.result)} />
+      <OnsetStatusBar state={run.state} tallies={run.tallies} incidentCount={incidentCount} done={Boolean(run.result)} />
 
       {run.node?.type === 'brief' && !run.result && <OnsetBrief node={run.node} busy={busy} onContinue={continueBrief} />}
 
       {(run.node?.type === 'incident' || run.node?.type === 'beat') && !run.result && !lastStep &&
-        <OnsetEvent node={run.node} index={run.path.length} busy={busy} error={error} onDecide={decide} />}
+        <OnsetEvent node={run.node} incidentCount={incidentCount} busy={busy} error={error} onDecide={decide} />}
 
       {lastStep && !run.result && <OnsetOutcome step={lastStep} state={run.state} onContinue={dismissOutcome} />}
 
@@ -792,7 +797,7 @@ function OnsetBrief({node, busy, onContinue}) {
   </section>
 }
 
-function OnsetStatusBar({state, tallies, total, done}) {
+function OnsetStatusBar({state, tallies, incidentCount, done}) {
   const intentTone = state.intent >= 66 ? 'good' : state.intent >= 40 ? 'mid' : 'bad'
   const moraleTone = state.morale >= 45 ? 'good' : state.morale >= 24 ? 'mid' : 'bad'
   return <section className={`os-status ${done ? 'done' : ''}`}>
@@ -800,18 +805,18 @@ function OnsetStatusBar({state, tallies, total, done}) {
     <span><Users size={13}/> 全组士气 <b className={moraleTone}>{state.morale}</b></span>
     <span><HeartCrack size={13}/> 创作意图 <b className={intentTone}>{state.intent}</b></span>
     <span><Sparkles size={13}/> 现场创造 <b>{state.craft}</b></span>
-    <span className="os-stance-count"><i className="protect">守 {tallies.protect}</i><i className="adapt">改 {tallies.adapt}</i><small>第 {Math.min(total + 1, 5)} / 5 个状况</small></span>
+    <span className="os-stance-count"><i className="protect">守 {tallies.protect}</i><i className="adapt">改 {tallies.adapt}</i><small>第 {done ? 5 : Math.min(incidentCount + 1, 5)} / 5 个状况</small></span>
   </section>
 }
 
-function OnsetEvent({node, index, busy, error, onDecide}) {
+function OnsetEvent({node, incidentCount, busy, error, onDecide}) {
   const Icon = ONSET_ICONS[node.category] || AlertTriangle
   const total = node.choices.length
   return <section className="os-event">
     <header className="os-event-head">
       <span className="os-event-icon"><Icon size={18}/></span>
       <div>
-        <p className="os-node-code">{node.code} · {node.type === 'beat' ? '你的上一个选择引出的连锁局面' : `突发状况 ${index + 1} / 5`}</p>
+        <p className="os-node-code">{node.code} · {node.type === 'beat' ? '你的上一个选择引出的连锁局面' : `突发状况 ${incidentCount + 1} / 5`}</p>
         <h1>{node.title}</h1>
       </div>
     </header>
