@@ -98,3 +98,89 @@
 .tool-banner .enter{color:var(--paper);display:flex;align-items:center;gap:6px;font:10px 'DM Mono';white-space:nowrap}
 @media(max-width:900px){.sb-input-grid{grid-template-columns:1fr}.storyboard{padding-left:7vw;padding-right:7vw}.sb-board-head{flex-direction:column;align-items:flex-start}}
 @media(max-width:640px){.storyboard{padding-top:60px}.sb-hero h1{font-size:44px}.shot-grid{grid-template-columns:1fr}.tl-head{flex-direction:column;align-items:flex-start}.sb-timeline{padding:22px 18px}.tool-banner{flex-wrap:wrap;gap:12px}.tool-banner-desc{flex-basis:100%}}
+
+/* ===== 轴线挑战 ===== */
+.axis-lab{padding:9vh 8vw 11vh;min-height:calc(100vh - 72px)}
+.axis-hero{max-width:820px}
+.axis-hero h1{font-family:'Playfair Display';font-weight:500;font-size:clamp(42px,5vw,68px);letter-spacing:-.045em;line-height:1.02;margin:0 0 24px}
+.axis-hero h1 i{color:var(--accent);font-weight:500}
+.axis-rules{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-top:40px}
+.axis-rule{border:1px solid var(--line);background:#e8e3da;padding:22px;display:flex;gap:16px}
+.axis-rule-num{font:11px 'DM Mono';color:var(--accent)}
+.axis-rule b{font-size:13px;font-weight:600}
+.axis-rule p{font-size:12px;line-height:1.65;color:var(--muted);margin:7px 0 0}
+.axis-game{margin-top:52px}
+.axis-bar{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:22px}
+.axis-bar .eyebrow{margin-bottom:10px}
+.axis-prompt{font-size:14px;line-height:1.7;color:#5e5b56;margin:0;max-width:640px}
+.axis-bar-side{display:flex;flex-direction:column;align-items:flex-end;gap:7px;font:10px 'DM Mono';color:var(--muted);white-space:nowrap}
+.axis-best{display:flex;align-items:center;gap:5px;color:#b08a3f}
+.axis-best svg{color:#b08a3f}
+.axis-map-wrap{background:var(--ink);padding:18px 18px 14px;position:relative}
+.axis-stage{width:100%;height:auto;display:block}
+.axis-map-hint{font-size:11px;line-height:1.7;color:#96928a;margin:12px 2px 0}
+.axis-map-hint strong{color:#d0775e;font-weight:500}
+.axis-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(208px,1fr));gap:11px;margin-top:20px}
+.axis-card{border:1px solid var(--line);background:#ebe7df;padding:14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:7px;transition:border-color .18s,background .18s,opacity .18s}
+.axis-card:disabled{cursor:default}
+.axis-card:hover:not(:disabled){border-color:var(--accent)}
+.axis-card.picked{border-color:var(--accent);background:#e0d5c8;box-shadow:inset 0 0 0 1px var(--accent)}
+.axis-card.is-valid{border-color:rgba(85,114,89,.55);background:#e6e7df}
+.axis-card.is-invalid{border-color:rgba(174,81,59,.45);background:#eadfd8}
+.axis-card.is-neutral{border-color:rgba(176,138,63,.6);background:#e9e3d4}
+.axis-card.was-picked{box-shadow:0 0 0 1.5px rgba(20,21,22,.45)}
+.axis-card-top{display:flex;justify-content:space-between;align-items:center}
+.axis-cam-num{font:11px 'DM Mono';color:var(--accent);letter-spacing:.08em}
+.axis-card b{font-size:13px;font-weight:600}
+.axis-card>p{font-size:11.5px;line-height:1.55;color:var(--muted);margin:0}
+.axis-frame{width:100%;aspect-ratio:100/56;display:block;border:1px solid rgba(20,21,22,.35)}
+.axis-badge{display:inline-flex;align-items:center;gap:4px;font:9px 'DM Mono';padding:3px 7px;letter-spacing:.06em;white-space:nowrap}
+.b-good,.b-avoid{background:rgba(85,114,89,.16);color:#45614a}
+.b-miss{background:rgba(85,114,89,.1);color:#7d9281;text-decoration:line-through}
+.b-bad{background:rgba(174,81,59,.18);color:#a24a33}
+.b-neutral,.b-neutral-off{background:rgba(176,138,63,.18);color:#8f6f30}
+.b-neutral-off{opacity:.65}
+.axis-reason{border-top:1px dashed var(--line);padding-top:8px;display:flex;flex-direction:column;gap:5px}
+.match-yes{font:9px 'DM Mono';color:#557259;letter-spacing:.05em}
+.match-no{font:9px 'DM Mono';color:#bb4b2b;letter-spacing:.05em}
+.axis-reason p{font-size:11px;line-height:1.65;color:#68645d;margin:0}
+.axis-submit{display:flex;justify-content:space-between;align-items:center;margin-top:20px;border:1px solid var(--line);background:#e8e3da;padding:16px 20px;font-size:12px;color:var(--muted);flex-wrap:wrap;gap:12px}
+.axis-submit b{color:var(--ink);font-size:15px;font-family:'DM Mono'}
+.primary:disabled{opacity:.4;cursor:not-allowed}
+.primary:disabled:hover{background:var(--ink)}
+.axis-verdict{display:flex;justify-content:space-between;align-items:center;gap:22px;margin-top:20px;padding:20px 22px;color:var(--paper)}
+.axis-verdict.ok{background:#3c4a3e}
+.axis-verdict.warn{background:#56352c}
+.axis-verdict .eyebrow{color:rgba(240,237,231,.65);margin-bottom:8px}
+.axis-verdict-line{font-size:13px;line-height:1.7;margin:0}
+.axis-verdict .primary{background:var(--paper);color:var(--ink);white-space:nowrap}
+.axis-verdict .primary:hover{background:#d9b26a}
+.axis-done{margin-top:7vh;border:1px solid var(--line);background:#e8e3da;padding:48px 7vw;text-align:center}
+.axis-done h2{font-family:'Playfair Display';font-weight:500;font-size:clamp(28px,3.4vw,42px);letter-spacing:-.03em;margin:14px 0 20px}
+.axis-final-score b{font-family:'Playfair Display';font-size:64px;font-weight:500;color:var(--accent)}
+.axis-final-score span{font:11px 'DM Mono';color:var(--muted);display:block;margin-top:4px}
+.axis-rounds{max-width:460px;margin:34px auto;text-align:left}
+.axis-round-row{display:flex;align-items:baseline;gap:14px;padding:13px 4px;border-bottom:1px solid var(--line);font-size:13px}
+.axis-round-row span:first-child{font:10px 'DM Mono';color:var(--muted);width:72px}
+.axis-round-row span:nth-child(2){flex:1}
+.axis-round-row b{font-family:'DM Mono'}
+.axis-done .primary{margin-top:30px}
+/* 俯视图机位标记 */
+.cam-marker polygon{fill:#3a4145;stroke:rgba(232,226,214,.85)}
+.cam-marker text{fill:rgba(232,226,214,.92);pointer-events:none}
+.cam-marker:hover polygon{stroke:#d0775e}
+.cam-marker.cam-selected polygon{fill:#d0775e;stroke:#f0ede7;stroke-width:1.8}
+.cam-marker.cam-selected text{fill:#1a1210}
+.cam-marker.cam-good-pick polygon{fill:rgba(97,138,104,.95);stroke:#cfe0d1}
+.cam-marker.cam-good-miss polygon{fill:#3a4145;stroke:rgba(127,168,134,.9)}
+.cam-marker.cam-bad-pick polygon{fill:#bb4b2b;stroke:#f3d3c8}
+.cam-marker.cam-bad-pick text{fill:#f6e7df}
+.cam-marker.cam-bad-avoid polygon{fill:#3a4145;stroke:#d0775e;stroke-dasharray:3 3}
+.cam-marker.cam-neutral-pick polygon{fill:#b08a3f;stroke:#f4e7c8}
+.cam-marker.cam-neutral-pick text{fill:#1a1210}
+.cam-marker.cam-neutral polygon{fill:#3a4145;stroke:#d9b26a}
+.axis-entry{margin-top:11px;background:#1d211f}
+.axis-entry:hover{background:#3c4a3e}
+@media(max-width:900px){.axis-lab{padding-left:7vw;padding-right:7vw}.axis-rules{grid-template-columns:1fr}}
+@media(max-width:640px){.axis-lab{padding-top:60px}.axis-bar{display:block}.axis-bar-side{flex-direction:row;align-items:center;margin-top:14px}.axis-cards{grid-template-columns:1fr 1fr}.axis-verdict{flex-direction:column;align-items:flex-start}.axis-done{padding:36px 22px}}
+@media(max-width:420px){.axis-cards{grid-template-columns:1fr}}
