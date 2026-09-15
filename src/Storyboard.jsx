@@ -179,7 +179,8 @@ export default function Storyboard() {
     if (from < 0 || to < 0) return prev
     const next = [...prev]
     const [moved] = next.splice(from, 1)
-    next.splice(to, 0, moved)
+    // 向后拖时，取出被拖卡片后目标索引前移一格，需补偿才能与 drop-before 指示一致
+    next.splice(from < to ? to - 1 : to, 0, moved)
     return next
   })
   const onCardDrop = (e, id) => { e.preventDefault(); e.stopPropagation(); insertBefore(dragId.current, id); clearDrag() }
